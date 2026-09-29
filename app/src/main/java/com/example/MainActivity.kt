@@ -237,7 +237,7 @@ fun MainAppContent(viewModel: NetraViewModel) {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = NetraDarkBg
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 modifier = Modifier.statusBarsPadding()
             )
@@ -256,7 +256,7 @@ fun MainAppContent(viewModel: NetraViewModel) {
                 }
             )
         },
-        containerColor = NetraDarkBg
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Column(
             modifier = Modifier
