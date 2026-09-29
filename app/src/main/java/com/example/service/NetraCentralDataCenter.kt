@@ -30,6 +30,7 @@ class NetraCentralDataCenter {
     private var lastConnectedState: Boolean? = null
     private var lastChargingState: Boolean? = null
     private var lastSpeedCategory: CanonicalChargingSpeed? = null
+    private var lastBatteryLevelBoundary: Int? = null
 
     suspend fun processRawInput(
         level: Int,
@@ -178,13 +179,14 @@ class NetraCentralDataCenter {
 
             if (validatedLevel != null) {
                 val boundary = (validatedLevel / 5) * 5
-                if (lastBatteryLevelBoundary == null || lastBatteryLevelBoundary != boundary) {
+                if (lastBatteryLevelBoundary != boundary) {
+                    val previousBoundary = lastBatteryLevelBoundary
                     lastBatteryLevelBoundary = boundary
                     val event = NetraCentralEvent(
                         eventId = "event_battery_boundary_${boundary}_$now",
                         eventType = NetraEventType.BATTERY_LEVEL_CROSSED,
                         timestamp = now,
-                        previousValue = lastBatteryLevelBoundary?.toString(),
+                        previousValue = previousBoundary?.toString(),
                         newValue = boundary.toString(),
                         source = source
                     )
