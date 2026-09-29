@@ -66,18 +66,15 @@ The application is built around these primary pillars:
 
 The application uses a light, professional interface with dynamic battery-aware visual treatment. Dark theme is not part of the primary design.
 
-The main navigation is:
+The main bottom navigation is fixed to exactly five top-level sections:
 
-- **Dashboard**
-- **Charging**
-- **Discharging**
-- **Monitoring**
-- **Devices**
-- **Activity Graph**
-- **Settings**
-- **Activity Log**
+1. **Home**
+2. **Battery**
+3. **Monitoring**
+4. **Devices**
+5. **Settings**
 
-Settings and Activity Log remain directly accessible from the main navigation.
+Charging and Discharging are state-based views inside **Battery**, not separate bottom tabs. Activity, History, Graphs, Logs, Permissions, and other future features belong inside the existing five sections.
 
 ### Dashboard
 
@@ -132,14 +129,15 @@ System monitoring center:
 
 ### Devices
 
-Bluetooth device list with:
+Live connected Bluetooth devices only:
 
-- Device name
-- Type
-- Pairing/connection state
-- Battery level when exposed by Android
+- Connected device name
+- Device type
+- Connection state
+- Battery level only when exposed by supported public Android APIs
 - Supported profile information
-- Other telemetry only when actually available
+- Paired but disconnected devices are hidden
+- No private/reflection API is used to fabricate Bluetooth battery data
 
 ### Activity Graph
 
@@ -458,6 +456,7 @@ Use this section to keep a concise chronological record of verified product chan
 |---|---|---|
 | 2026-09-29 | Zero-based product/UI specification established for the Nethra rebuild | In Development |
 | 2026-09-29 | README maintenance and feature-verification policy established | Verified |
+| 2026-09-29 | Central battery state/event normalization hardened; five-tab navigation and connected-only Bluetooth foundation updated | In Development |
 
 Future entries must be added when the corresponding product change is verified. Do not mark a feature **Verified** until the implementation and required checks have actually confirmed it.
 
