@@ -40,6 +40,7 @@ class BatteryMonitorService : Service() {
     private var lastTempTimestamp: Long = 0L
     private var lastNotified80PercentSession = false
     private var lastOverheatAlertTime = 0L
+    private var lastThresholdAlertTime = 0L
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -223,6 +224,11 @@ class BatteryMonitorService : Service() {
 
         _liveTelemetryFlow.value = telemetry
 
+        // Update Home Screen Widget
+        try {
+            com.example.widget.NetraBatteryWidgetProvider.updateAllWidgets(this, telemetry)
+        } catch (_: Exception) {}
+
         // Update persistent notification
         updateForegroundNotification(telemetry)
 
@@ -291,6 +297,20 @@ class BatteryMonitorService : Service() {
                     dotColor = "RED"
                 )
             }
+        } else if (telemetry.temperature >= settings.thermalWarningThreshold && (now - lastThresholdAlertTime > 180_000L)) {
+            // User-defined safe temperature threshold alert
+            lastThresholdAlertTime = now
+            sendThermalThresholdNotification(telemetry.temperature, settings.thermalWarningThreshold)
+            triggerVibrationAlert()
+            serviceScope.launch {
+                NetraApplication.instance.batteryRepository.logEvent(
+                    title = "Thermal Safe Limit Exceeded (${telemetry.temperature}°C)",
+                    message = "Battery temperature exceeded user-defined safe threshold of ${settings.thermalWarningThreshold}°C.",
+                    category = "THERMAL",
+                    severity = "WARNING",
+                    dotColor = "AMBER"
+                )
+            }
         }
     }
 
@@ -348,6 +368,26 @@ class BatteryMonitorService : Service() {
             .build()
 
         notificationManager.notify(NOTIFICATION_OVERHEAT_ID, notification)
+    }
+
+    private fun sendThermalThresholdNotification(temp: Float, threshold: Float) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val intent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 103, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ALERTS_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("⚠️ Temperature Alert: ${temp}°C")
+            .setContentText("Battery reached ${temp}°C, exceeding your safe threshold of ${threshold}°C.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        notificationManager.notify(NOTIFICATION_THRESHOLD_ID, notification)
     }
 
     private fun createNotificationChannels() {
@@ -432,6 +472,7 @@ class BatteryMonitorService : Service() {
         const val NOTIFICATION_ID = 2001
         const val NOTIFICATION_ALARM_ID = 2002
         const val NOTIFICATION_OVERHEAT_ID = 2003
+        const val NOTIFICATION_THRESHOLD_ID = 2004
 
         private val _liveTelemetryFlow = MutableStateFlow(BatteryTelemetry())
         val liveTelemetryFlow: StateFlow<BatteryTelemetry> = _liveTelemetryFlow.asStateFlow()

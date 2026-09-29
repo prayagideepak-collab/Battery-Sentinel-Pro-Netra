@@ -210,6 +210,15 @@ fun ChargingScreen(
             }
         }
 
+        // Charging Speed & Efficiency Dashboard (Room DB cycles & power curve)
+        item {
+            val records by viewModel.graphRecords.collectAsStateWithLifecycle()
+            com.example.ui.components.ChargingSpeedEfficiencyDashboard(
+                records = records,
+                sessions = sessions
+            )
+        }
+
         // Charging Sessions History (from Room Database)
         item {
             Row(

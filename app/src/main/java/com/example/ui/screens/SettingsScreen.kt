@@ -191,7 +191,66 @@ fun SettingsScreen(
             }
         }
 
-        // 3. Power Optimization Engine
+        // 3. User-Defined Safe Thermal Limit & Alert System
+        item {
+            SentinelCard(
+                title = "Safe Temperature Limit Alert",
+                icon = Icons.Default.DeviceThermostat,
+                dotState = DotState.CONNECTED,
+                accentColor = StatusRed
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Push Alert Threshold", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(text = "Triggers local push notification & vibration when exceeded", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(
+                        text = "${String.format("%.1f", settings.thermalWarningThreshold)} °C",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = StatusRed
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(38.0f, 40.0f, 42.0f, 44.0f).forEach { temp ->
+                        val isSelected = kotlin.math.abs(settings.thermalWarningThreshold - temp) < 0.1f
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.setThermalWarningThreshold(temp) },
+                            label = { Text("${temp.toInt()}°C", fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = StatusRed.copy(alpha = 0.2f),
+                                selectedLabelColor = StatusRed
+                            ),
+                            modifier = Modifier.weight(1f).testTag("thermal_chip_${temp.toInt()}")
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Slider(
+                    value = settings.thermalWarningThreshold,
+                    onValueChange = { viewModel.setThermalWarningThreshold(it) },
+                    valueRange = 36f..46f,
+                    steps = 9,
+                    colors = SliderDefaults.colors(thumbColor = StatusRed, activeTrackColor = StatusRed),
+                    modifier = Modifier.testTag("thermal_threshold_slider")
+                )
+            }
+        }
+
+        // 4. Power Optimization Engine
         item {
             SentinelCard(
                 title = "Power Optimization Engine",

@@ -92,16 +92,28 @@ fun GraphScreen(
         item {
             Column {
                 Text(
-                    text = "Activity Telemetry Graph",
+                    text = "Activity Telemetry & Health Analytics",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Persisted SQLite Room database telemetry with touch-scrub cursor",
+                    text = "Dynamic line chart analytics & telemetry from SQLite Room database",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+
+        // Dynamic Battery Health % Over Time Line Chart
+        item {
+            SentinelCard(
+                title = "Battery Health % Over Time",
+                icon = Icons.Default.ShowChart,
+                dotState = com.example.model.DotState.CONNECTED,
+                accentColor = NetraEmerald
+            ) {
+                com.example.ui.components.BatteryHealthTrendLineChart(records = records)
             }
         }
 
