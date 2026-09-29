@@ -126,7 +126,7 @@ class NetraCentralDataCenterTest {
         }
 
         dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 2500000, null, null)
-        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, android.os.BatteryManager.BATTERY_PLUGGED_NONE, 300, 4000, -500000, null, null)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 4000, -500000, null, null)
 
         job.cancel()
 
@@ -142,7 +142,7 @@ class NetraCentralDataCenterTest {
             dataCenter.centralEvents.toList(events)
         }
 
-        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, android.os.BatteryManager.BATTERY_PLUGGED_NONE, 300, 4000, -500000, null, null)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 4000, -500000, null, null)
         dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 2500000, null, null)
 
         job.cancel()
@@ -211,7 +211,7 @@ class NetraCentralDataCenterTest {
                 dataCenter.processRawInput(
                     level = i, scale = 100,
                     status = android.os.BatteryManager.BATTERY_STATUS_DISCHARGING,
-                    plugged = android.os.BatteryManager.BATTERY_PLUGGED_NONE,
+                    plugged = 0,
                     temperatureRaw = 300 + i, voltage = 4000, currentMicroAmps = -500000,
                     bluetoothConnected = null, bluetoothBattery = null
                 )
