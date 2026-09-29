@@ -1,0 +1,49 @@
+version: 2
+
+updates:
+  # Android / Kotlin / Gradle dependencies
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+
+    groups:
+      android-dependencies:
+        patterns:
+          - "androidx*"
+          - "com.android*"
+          - "org.jetbrains.kotlin*"
+
+      testing-dependencies:
+        patterns:
+          - "*junit*"
+          - "*mockito*"
+          - "*robolectric*"
+
+      other-gradle-dependencies:
+        patterns:
+          - "*"
+
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5Gradle dependencies
+        ↓
+Dependabot हर Monday check करेगा
+        ↓
+Security/update available?
+        ↓
+PR बनाएगा
+        ↓
+GitHub Actions
+        ↓
+Android Build / tests
+        ↓
+Review
+        ↓
+Merge
