@@ -51,26 +51,15 @@ import com.example.ui.theme.StatusGreen
 import com.example.ui.theme.StatusRed
 import com.example.viewmodel.NetraViewModel
 
-enum class DeviceFilter {
-    ALL,
-    CONNECTED,
-    PAIRED
-}
-
 @Composable
 fun DevicesScreen(
     viewModel: NetraViewModel,
     modifier: Modifier = Modifier
 ) {
-    var selectedFilter by remember { mutableStateOf(DeviceFilter.ALL) }
     val btDevices by viewModel.bluetoothDevices.collectAsStateWithLifecycle()
     val permissions by viewModel.systemPermissions.collectAsStateWithLifecycle()
 
-    val filteredDevices = when (selectedFilter) {
-        DeviceFilter.ALL -> btDevices
-        DeviceFilter.CONNECTED -> btDevices.filter { it.isConnected }
-        DeviceFilter.PAIRED -> btDevices.filter { it.isPaired }
-    }
+    val filteredDevices = btDevices.filter { it.isConnected }
 
     LazyColumn(
         modifier = modifier
@@ -106,42 +95,6 @@ fun DevicesScreen(
             }
         }
 
-        // Filter Chips (All, Connected, Paired)
-        item {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                FilterChip(
-                    selected = selectedFilter == DeviceFilter.ALL,
-                    onClick = { selectedFilter = DeviceFilter.ALL },
-                    label = { Text("All (${btDevices.size})") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = NetraCyan.copy(alpha = 0.2f),
-                        selectedLabelColor = NetraCyan
-                    )
-                )
-                FilterChip(
-                    selected = selectedFilter == DeviceFilter.CONNECTED,
-                    onClick = { selectedFilter = DeviceFilter.CONNECTED },
-                    label = { Text("Connected (${btDevices.count { it.isConnected }})") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = NetraEmerald.copy(alpha = 0.2f),
-                        selectedLabelColor = NetraEmerald
-                    )
-                )
-                FilterChip(
-                    selected = selectedFilter == DeviceFilter.PAIRED,
-                    onClick = { selectedFilter = DeviceFilter.PAIRED },
-                    label = { Text("Paired (${btDevices.count { it.isPaired }})") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = NetraCyan.copy(alpha = 0.2f),
-                        selectedLabelColor = NetraCyan
-                    )
-                )
-            }
-        }
-
         if (filteredDevices.isEmpty()) {
             item {
                 Box(
@@ -157,7 +110,7 @@ fun DevicesScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = if (!permissions.isBluetoothGranted) "Bluetooth permission needed to query device batteries."
-                            else "No devices match filter. Pair accessories in Android Settings.",
+                            else "No connected Bluetooth devices. Paired but disconnected devices are hidden.",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
