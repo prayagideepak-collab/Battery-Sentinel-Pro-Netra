@@ -16,6 +16,11 @@ data class NetraCentralState(
     val batteryLevel: Int? = null, // null if unavailable
     val isCharging: Boolean? = null,
     val isChargerConnected: Boolean? = null,
+    val chargerConnectedAt: Long? = null,
+    val chargingStartedAt: Long? = null,
+    val chargingStoppedAt: Long? = null,
+    val chargerDisconnectedAt: Long? = null,
+    val dischargingStartedAt: Long? = null,
     val pluggedType: CanonicalPluggedType? = null,
     val temperatureCelsius: Float? = null, // null if unavailable
     val voltageMv: Int? = null, // null if unavailable

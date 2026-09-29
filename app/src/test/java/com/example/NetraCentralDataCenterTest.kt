@@ -205,6 +205,47 @@ class NetraCentralDataCenterTest {
     }
 
     @Test
+    fun `test charger session timestamps separate connection from actual charging`() = runTest(testDispatcher) {
+        dataCenter.processRawInput(40, 100, android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 0, null, null)
+        val connected = dataCenter.centralState.value
+        assertEquals(true, connected.isChargerConnected)
+        assertEquals(false, connected.isCharging)
+        assertNotNull(connected.chargerConnectedAt)
+        assertNull(connected.chargingStartedAt)
+
+        dataCenter.processRawInput(40, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 2500000, null, null)
+        val charging = dataCenter.centralState.value
+        assertEquals(connected.chargerConnectedAt, charging.chargerConnectedAt)
+        assertNotNull(charging.chargingStartedAt)
+
+        dataCenter.processRawInput(40, 100, android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 0, null, null)
+        val stopped = dataCenter.centralState.value
+        assertNotNull(stopped.chargingStoppedAt)
+        assertNull(stopped.dischargingStartedAt)
+        assertNull(stopped.chargerDisconnectedAt)
+
+        dataCenter.processRawInput(40, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 4000, -500000, null, null)
+        assertNotNull(dataCenter.centralState.value.chargerDisconnectedAt)
+        assertNotNull(dataCenter.centralState.value.dischargingStartedAt)
+    }
+
+    @Test
+    fun `test discharging start is separate from stopping charge`() = runTest(testDispatcher) {
+        val events = mutableListOf<NetraCentralEvent>()
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            dataCenter.centralEvents.toList(events)
+        }
+
+        dataCenter.processRawInput(40, 100, android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 0, null, null)
+        assertTrue(events.none { it.eventType == NetraEventType.DISCHARGING_STARTED })
+        dataCenter.processRawInput(40, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 4000, -500000, null, null)
+        assertEquals(1, events.count { it.eventType == NetraEventType.DISCHARGING_STARTED })
+        dataCenter.processRawInput(40, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 4000, -500000, null, null)
+        assertEquals(1, events.count { it.eventType == NetraEventType.DISCHARGING_STARTED })
+        job.cancel()
+    }
+
+    @Test
     fun `test unknown plug and invalid level stay unavailable`() = runTest(testDispatcher) {
         dataCenter.processRawInput(Int.MAX_VALUE, 100, android.os.BatteryManager.BATTERY_STATUS_UNKNOWN, -1, 0, 0, 0, null, null)
         val state = dataCenter.centralState.value

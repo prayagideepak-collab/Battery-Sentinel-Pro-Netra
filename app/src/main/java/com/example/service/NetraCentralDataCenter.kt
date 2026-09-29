@@ -31,6 +31,12 @@ class NetraCentralDataCenter {
     private var lastChargingState: Boolean? = null
     private var lastSpeedCategory: CanonicalChargingSpeed? = null
     private var lastBatteryLevelBoundary: Int? = null
+    private var chargerConnectedAt: Long? = null
+    private var chargingStartedAt: Long? = null
+    private var chargingStoppedAt: Long? = null
+    private var chargerDisconnectedAt: Long? = null
+    private var dischargingStartedAt: Long? = null
+    private var lastDischargingStatus = false
 
     suspend fun processRawInput(
         level: Int,
@@ -99,10 +105,32 @@ class NetraCentralDataCenter {
                 CanonicalChargingSpeed.UNAVAILABLE
             }
 
+            // Charger presence and actual charging are separate transitions.
+            if (isConnected != null && isConnected != lastConnectedState) {
+                if (isConnected) chargerConnectedAt = now else chargerDisconnectedAt = now
+            }
+            if (isCharging != null && isCharging != lastChargingState) {
+                if (isCharging) {
+                    chargingStartedAt = now
+                } else {
+                    chargingStoppedAt = now
+                }
+            }
+
+            val isDischarging = status == BatteryManager.BATTERY_STATUS_DISCHARGING
+            val wasDischarging = lastDischargingStatus
+            if (isDischarging && !wasDischarging) dischargingStartedAt = now
+            lastDischargingStatus = isDischarging
+
             val newState = NetraCentralState(
                 batteryLevel = validatedLevel,
                 isCharging = isCharging,
                 isChargerConnected = isConnected,
+                chargerConnectedAt = chargerConnectedAt,
+                chargingStartedAt = chargingStartedAt,
+                chargingStoppedAt = chargingStoppedAt,
+                chargerDisconnectedAt = chargerDisconnectedAt,
+                dischargingStartedAt = dischargingStartedAt,
                 pluggedType = pluggedType,
                 temperatureCelsius = tempCelsius,
                 voltageMv = voltageMv,
@@ -151,18 +179,19 @@ class NetraCentralDataCenter {
                         source = source
                     )
                 )
-                if (!isCharging && previousChargingState == true) {
-                    _centralEvents.emit(
-                        NetraCentralEvent(
-                            eventId = "event_DISCHARGING_STARTED_$now",
-                            eventType = NetraEventType.DISCHARGING_STARTED,
-                            timestamp = now,
-                            previousValue = "true",
-                            newValue = "true",
-                            source = source
-                        )
+            }
+
+            if (isDischarging && !wasDischarging) {
+                _centralEvents.emit(
+                    NetraCentralEvent(
+                        eventId = "event_DISCHARGING_STARTED_$now",
+                        eventType = NetraEventType.DISCHARGING_STARTED,
+                        timestamp = now,
+                        previousValue = wasDischarging.toString(),
+                        newValue = isDischarging.toString(),
+                        source = source
                     )
-                }
+                )
             }
 
             if (speedCategory == CanonicalChargingSpeed.UNAVAILABLE) {
