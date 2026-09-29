@@ -390,3 +390,83 @@ Before considering a feature complete, verify all three layers:
 → the user can see the result, use the control, and understand its current status.
 
 A feature is not complete when code exists only in the backend or when a UI control exists without a working implementation.
+
+
+## README Maintenance & Feature Verification Policy
+
+This README is a **living product specification and public feature record** for Battery Sentinel Pro Nethra.
+
+Whenever a new feature, UI change, permission flow, monitoring capability, backend component, data model, security improvement, release/update mechanism, or other user-visible product change is implemented, the README must be updated in the **same development change**.
+
+### Mandatory rule
+
+A feature must not be described as implemented merely because code was written.
+
+The feature status must be based on verification:
+
+| Status | Meaning |
+|---|---|
+| **Planned** | Defined in the product specification but implementation has not started or is incomplete. |
+| **In Development** | Implementation is actively being worked on and is not yet verified complete. |
+| **Implemented** | Code and the required UI/data flow are present, but final verification is still pending. |
+| **Verified** | Implementation has been checked through the appropriate build/test/runtime/UI verification and the expected result is confirmed. |
+| **Unavailable / Android Limitation** | The requested capability is not exposed or cannot be reliably controlled through the supported Android APIs. |
+
+### Verification rule
+
+When a feature reaches verified status, update the corresponding README section at the same time.
+
+Verification should cover the layers relevant to the feature:
+
+1. **Backend/Data** — the Android API, monitor, repository, database, or controller actually works or reports a truthful limitation.
+2. **State/Navigation** — the result reaches the intended application state and screen.
+3. **UI** — the user can see the result and the related controls respond correctly.
+4. **Build/Test** — the project compiles and applicable tests/checks pass.
+5. **Runtime/UI verification** — where applicable, the feature is exercised in the Android application and its visible result is confirmed.
+
+A feature is **not Verified** merely because an AI coder reports that it completed the task.
+
+### Same-change documentation rule
+
+For every completed feature change:
+
+```
+Implement
+→ Build/Test
+→ Verify
+→ Update README
+→ Commit together
+```
+
+The README update should document, as applicable:
+
+- What changed
+- Where it appears in the application
+- How it works
+- What Android API or data source it uses
+- What user control/action is available
+- What result the user should see
+- Permission requirements
+- Known Android limitations
+- Verification status
+
+### Feature changelog
+
+Use this section to keep a concise chronological record of verified product changes.
+
+| Date | Change | Status |
+|---|---|---|
+| 2026-09-29 | Zero-based product/UI specification established for the Nethra rebuild | In Development |
+| 2026-09-29 | README maintenance and feature-verification policy established | Verified |
+
+Future entries must be added when the corresponding product change is verified. Do not mark a feature **Verified** until the implementation and required checks have actually confirmed it.
+
+### Documentation accuracy
+
+The README must always describe the **current state of the application**, not an outdated intended state.
+
+If a feature is removed, replaced, redesigned, or found to be unsupported by Android, update or remove its README description in the same change.
+
+If an implementation is incomplete, the README must say so rather than presenting the feature as finished.
+
+This rule applies to all future development on the `main` branch.
