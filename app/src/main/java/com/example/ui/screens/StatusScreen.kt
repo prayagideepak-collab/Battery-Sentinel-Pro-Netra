@@ -51,6 +51,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -284,6 +285,43 @@ fun StatusScreen(
 
         // Gemini Health Insights (Firebase AI SDK & ML Degradation/Failure Predictor)
         com.example.ui.components.GeminiHealthInsightsCard(viewModel = viewModel)
+
+        // Battery Calibration Wizard (Full discharge/charge accuracy recalibration)
+        val calibState by viewModel.calibrationState.collectAsStateWithLifecycle()
+        com.example.ui.components.BatteryCalibrationWizardCard(
+            calibrationState = calibState,
+            telemetry = telemetry,
+            onStartCalibration = { viewModel.startCalibration() },
+            onCancelCalibration = { viewModel.cancelCalibration() },
+            onAdvanceStep = { viewModel.advanceCalibrationStep() }
+        )
+
+        // Dynamic Power-Saving Profile System
+        val profileState by viewModel.powerProfileState.collectAsStateWithLifecycle()
+        com.example.ui.components.PowerSavingProfileCard(
+            profileState = profileState,
+            onSelectProfile = { viewModel.setPowerProfile(it) }
+        )
+
+        // Visual Heatmap: Correlating 24H Battery Temperature Spikes with Top Power-Consuming Apps
+        val heatmapRecords by viewModel.graphRecords.collectAsStateWithLifecycle()
+        val allSessions by viewModel.recentChargingSessions.collectAsStateWithLifecycle()
+        val topAppsList = remember { com.example.util.UsageStatsHelper.getAppUsageDrainList(context) }
+        com.example.ui.components.ThermalAppCorrelationHeatmap(
+            records = heatmapRecords,
+            topApps = topAppsList
+        )
+
+        // Night Thermal Throttling Card
+        com.example.ui.components.NightChargingThrottleCard(
+            telemetry = telemetry,
+            isFeatureEnabled = settings.nightChargingThrottleEnabled,
+            targetWakeHour = settings.nightTargetWakeHour,
+            records = heatmapRecords,
+            sessions = allSessions,
+            onToggleFeature = { viewModel.setNightChargingThrottleEnabled(it) },
+            onSelectWakeHour = { viewModel.setNightTargetWakeHour(it) }
+        )
 
         // B. Battery Saving Engine
         SentinelCard(

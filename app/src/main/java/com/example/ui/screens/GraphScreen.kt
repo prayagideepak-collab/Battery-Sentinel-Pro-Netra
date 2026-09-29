@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,6 +58,7 @@ fun GraphScreen(
     viewModel: NetraViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var selectedMetric by remember { mutableStateOf(GraphMetric.LEVEL) }
     val timeWindow by viewModel.selectedTimeWindow.collectAsStateWithLifecycle()
     val records by viewModel.graphRecords.collectAsStateWithLifecycle()
@@ -193,6 +195,15 @@ fun GraphScreen(
                     }
                 }
             }
+        }
+
+        // Visual 24H x 5 App Thermal Correlation Heatmap
+        item {
+            val topAppsList = remember { com.example.util.UsageStatsHelper.getAppUsageDrainList(context) }
+            com.example.ui.components.ThermalAppCorrelationHeatmap(
+                records = records,
+                topApps = topAppsList
+            )
         }
 
         item { Spacer(modifier = Modifier.height(16.dp)) }

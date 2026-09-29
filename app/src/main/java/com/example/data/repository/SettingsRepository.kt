@@ -15,7 +15,9 @@ data class SentinelSettings(
     val thermalWarningThreshold: Float = 40.0f,
     val criticalOverheatThreshold: Float = 45.0f,
     val notificationEnabled: Boolean = true,
-    val soundAlertEnabled: Boolean = true
+    val soundAlertEnabled: Boolean = true,
+    val nightChargingThrottleEnabled: Boolean = true,
+    val nightTargetWakeHour: Int = 7 // 07:00 AM predicted wake
 )
 
 class SettingsRepository(context: Context) {
@@ -34,7 +36,9 @@ class SettingsRepository(context: Context) {
             thermalWarningThreshold = prefs.getFloat("thermal_warning", 40.0f),
             criticalOverheatThreshold = prefs.getFloat("critical_overheat", 45.0f),
             notificationEnabled = prefs.getBoolean("notif_enabled", true),
-            soundAlertEnabled = prefs.getBoolean("sound_enabled", true)
+            soundAlertEnabled = prefs.getBoolean("sound_enabled", true),
+            nightChargingThrottleEnabled = prefs.getBoolean("night_charging_throttle", true),
+            nightTargetWakeHour = prefs.getInt("night_target_wake_hour", 7)
         )
     }
 
@@ -71,5 +75,15 @@ class SettingsRepository(context: Context) {
     fun setNotificationEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("notif_enabled", enabled).apply()
         _settings.value = _settings.value.copy(notificationEnabled = enabled)
+    }
+
+    fun setNightChargingThrottleEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("night_charging_throttle", enabled).apply()
+        _settings.value = _settings.value.copy(nightChargingThrottleEnabled = enabled)
+    }
+
+    fun setNightTargetWakeHour(hour: Int) {
+        prefs.edit().putInt("night_target_wake_hour", hour).apply()
+        _settings.value = _settings.value.copy(nightTargetWakeHour = hour)
     }
 }

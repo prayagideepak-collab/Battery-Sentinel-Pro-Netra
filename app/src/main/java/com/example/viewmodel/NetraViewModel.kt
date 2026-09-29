@@ -90,6 +90,12 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
     val deepDischargeCount: StateFlow<Int> = repository.deepDischargeCount
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    // Battery Calibration State
+    val calibrationState = NetraApplication.instance.calibrationManager.calibrationState
+
+    // Dynamic Power-Saving Profile State
+    val powerProfileState = NetraApplication.instance.powerProfileManager.profileState
+
     // Charging & Discharging Lists
     val recentChargingSessions: StateFlow<List<ChargingSession>> = repository.recentChargingSessions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -210,6 +216,60 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setThermalWarningThreshold(threshold: Float) {
         settingsRepository.setThermalWarningThreshold(threshold)
+    }
+
+    // Calibration Control Methods
+    fun startCalibration() {
+        NetraApplication.instance.calibrationManager.startCalibration(liveTelemetry.value.level)
+        viewModelScope.launch {
+            repository.logEvent(
+                title = "Calibration Wizard Started",
+                message = "Initiated full discharge & charge cycle for electrochemical capacity recalibration.",
+                category = "SYSTEM",
+                severity = "INFO",
+                dotColor = "BLUE"
+            )
+        }
+    }
+
+    fun cancelCalibration() {
+        NetraApplication.instance.calibrationManager.cancelCalibration()
+    }
+
+    fun advanceCalibrationStep() {
+        NetraApplication.instance.calibrationManager.manuallyAdvanceStep()
+    }
+
+    // Power Profile Selection
+    fun setPowerProfile(mode: com.example.model.PowerProfileMode) {
+        NetraApplication.instance.powerProfileManager.setPowerProfile(mode, liveTelemetry.value)
+        viewModelScope.launch {
+            repository.logEvent(
+                title = "Power Profile Updated: ${mode.title}",
+                message = mode.subtitle,
+                category = "SYSTEM",
+                severity = "INFO",
+                dotColor = "GREEN"
+            )
+        }
+    }
+
+    // Night Charging Throttling
+    fun setNightChargingThrottleEnabled(enabled: Boolean) {
+        settingsRepository.setNightChargingThrottleEnabled(enabled)
+        viewModelScope.launch {
+            repository.logEvent(
+                title = if (enabled) "Night Thermal Throttling Armed" else "Night Throttling Disabled",
+                message = if (enabled) "Charging speed will be throttled at night to limit thermal stress." else "Full charging speed permitted 24/7.",
+                category = "SYSTEM",
+                severity = "INFO",
+                dotColor = if (enabled) "GREEN" else "AMBER"
+            )
+        }
+    }
+
+    fun setNightTargetWakeHour(hour: Int) {
+        settingsRepository.setNightTargetWakeHour(hour)
     }
 
     fun clearDatabase() {

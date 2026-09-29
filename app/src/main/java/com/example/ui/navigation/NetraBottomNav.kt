@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,6 +48,7 @@ enum class NetraTab(val title: String, val icon: ImageVector, val tag: String) {
     STATUS("Status", Icons.Default.Home, "tab_status"),
     CHARGING("Charging", Icons.Default.Bolt, "tab_charging"),
     DISCHARGING("Discharging", Icons.Default.BatteryAlert, "tab_discharging"),
+    APPS("Apps", Icons.Default.Widgets, "tab_apps"),
     MONITORING("Monitoring", Icons.Default.QueryStats, "tab_monitoring"),
     DEVICES("Devices", Icons.Default.Headset, "tab_devices"),
     GRAPH("Graph", Icons.Default.ShowChart, "tab_graph"),

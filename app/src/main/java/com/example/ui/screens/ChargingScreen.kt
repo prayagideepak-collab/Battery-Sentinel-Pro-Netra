@@ -228,6 +228,20 @@ fun ChargingScreen(
             )
         }
 
+        // Night Thermal Throttling Card
+        item {
+            val records by viewModel.graphRecords.collectAsStateWithLifecycle()
+            com.example.ui.components.NightChargingThrottleCard(
+                telemetry = telemetry,
+                isFeatureEnabled = settings.nightChargingThrottleEnabled,
+                targetWakeHour = settings.nightTargetWakeHour,
+                records = records,
+                sessions = sessions,
+                onToggleFeature = { viewModel.setNightChargingThrottleEnabled(it) },
+                onSelectWakeHour = { viewModel.setNightTargetWakeHour(it) }
+            )
+        }
+
         // Charging Sessions History (from Room Database)
         item {
             Row(

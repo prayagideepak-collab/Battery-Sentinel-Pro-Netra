@@ -98,4 +98,63 @@ class ExampleRobolectricTest {
         assertTrue(pdfFile!!.exists())
         assertTrue(pdfFile.length() > 0)
     }
+
+    @Test
+    fun `test battery calibration wizard step progression`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val calibManager = com.example.ai.BatteryCalibrationManager(context)
+
+        calibManager.startCalibration(75)
+        assertEquals(com.example.model.CalibrationStep.STEP_1_DISCHARGE, calibManager.calibrationState.value.currentStep)
+        assertTrue(calibManager.calibrationState.value.isWizardActive)
+
+        // Simulate reaching 10% discharge
+        calibManager.onTelemetryUpdate(BatteryTelemetry(level = 9, isCharging = false))
+        assertEquals(com.example.model.CalibrationStep.STEP_2_REST, calibManager.calibrationState.value.currentStep)
+
+        calibManager.manuallyAdvanceStep()
+        assertEquals(com.example.model.CalibrationStep.STEP_3_FULL_CHARGE, calibManager.calibrationState.value.currentStep)
+
+        calibManager.cancelCalibration()
+        assertEquals(com.example.model.CalibrationStep.NOT_STARTED, calibManager.calibrationState.value.currentStep)
+    }
+
+    @Test
+    fun `test dynamic power-saving profile threshold transitions`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val profileManager = com.example.ai.PowerProfileManager(context)
+
+        profileManager.setPowerProfile(com.example.model.PowerProfileMode.SMART_ADAPTIVE)
+
+        // Normal level (80%) -> Balanced
+        profileManager.onTelemetryUpdate(BatteryTelemetry(level = 80, isCharging = false))
+        assertEquals(com.example.model.PowerProfileMode.BALANCED, profileManager.profileState.value.activeEffectiveMode)
+
+        // Low level (18%) -> Endurance
+        profileManager.onTelemetryUpdate(BatteryTelemetry(level = 18, isCharging = false))
+        assertEquals(com.example.model.PowerProfileMode.ENDURANCE, profileManager.profileState.value.activeEffectiveMode)
+        assertTrue(profileManager.profileState.value.dynamicSyncThrottled)
+
+        // Critical level (8%) -> Ultra Saver
+        profileManager.onTelemetryUpdate(BatteryTelemetry(level = 8, isCharging = false))
+        assertEquals(com.example.model.PowerProfileMode.ULTRA_SAVER, profileManager.profileState.value.activeEffectiveMode)
+
+        // Charging -> Performance
+        profileManager.onTelemetryUpdate(BatteryTelemetry(level = 8, isCharging = true))
+        assertEquals(com.example.model.PowerProfileMode.PERFORMANCE, profileManager.profileState.value.activeEffectiveMode)
+    }
+
+    @Test
+    fun `test night charging thermal throttling evaluation`() {
+        val telemetry = BatteryTelemetry(level = 85, isCharging = true, temperature = 34.0f)
+        val status = com.example.ai.NightChargingThrottler.evaluateNightThrottle(
+            telemetry = telemetry,
+            isFeatureEnabled = true,
+            targetWakeHour = 7
+        )
+
+        assertNotNull(status)
+        assertNotNull(status.statusHeadline)
+        assertNotNull(status.detailedAdvice)
+    }
 }

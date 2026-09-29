@@ -14,8 +14,13 @@ data class AppUsageItem(
     val packageName: String,
     val appName: String,
     val foregroundTimeMinutes: Long,
+    val backgroundTimeMinutes: Long = 0L,
     val estimatedDrainPercent: Float,
-    val isHighDrain: Boolean
+    val estimatedEnergyMah: Int = 0,
+    val consumptionRateMahPerHour: Float = 0f,
+    val category: String = "Application",
+    val isHighDrain: Boolean = false,
+    val anomalyWarning: String? = null
 )
 
 data class SystemPermissionsState(

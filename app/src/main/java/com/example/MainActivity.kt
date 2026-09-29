@@ -60,6 +60,7 @@ import com.example.model.DotState
 import com.example.ui.components.StatusDot
 import com.example.ui.navigation.NetraBottomNav
 import com.example.ui.navigation.NetraTab
+import com.example.ui.screens.AppBatteryUsageScreen
 import com.example.ui.screens.ChargingScreen
 import com.example.ui.screens.DevicesScreen
 import com.example.ui.screens.DischargingScreen
@@ -256,6 +257,7 @@ fun MainAppContent(viewModel: NetraViewModel) {
                 NetraTab.STATUS -> StatusScreen(viewModel = viewModel, onNavigateTab = { currentTab = it })
                 NetraTab.CHARGING -> ChargingScreen(viewModel = viewModel)
                 NetraTab.DISCHARGING -> DischargingScreen(viewModel = viewModel)
+                NetraTab.APPS -> AppBatteryUsageScreen(viewModel = viewModel)
                 NetraTab.MONITORING -> MonitoringScreen(viewModel = viewModel)
                 NetraTab.DEVICES -> DevicesScreen(viewModel = viewModel)
                 NetraTab.GRAPH -> GraphScreen(viewModel = viewModel)

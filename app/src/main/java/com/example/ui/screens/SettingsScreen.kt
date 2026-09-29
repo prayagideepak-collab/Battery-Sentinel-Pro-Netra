@@ -254,7 +254,16 @@ fun SettingsScreen(
             }
         }
 
-        // 4. Power Optimization Engine
+        // 4. Power-Saving Profiles (Smart Adaptive, Balanced, Performance, Endurance, Ultra Saver)
+        item {
+            val profileState by viewModel.powerProfileState.collectAsStateWithLifecycle()
+            com.example.ui.components.PowerSavingProfileCard(
+                profileState = profileState,
+                onSelectProfile = { viewModel.setPowerProfile(it) }
+            )
+        }
+
+        // 5. Power Optimization Engine
         item {
             SentinelCard(
                 title = "Power Optimization Engine",

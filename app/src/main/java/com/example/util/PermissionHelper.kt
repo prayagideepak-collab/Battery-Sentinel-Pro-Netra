@@ -38,7 +38,7 @@ object PermissionHelper {
         )
     }
 
-    private fun isUsageAccessGranted(context: Context): Boolean {
+    fun isUsageAccessGranted(context: Context): Boolean {
         return try {
             val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
             val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

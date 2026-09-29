@@ -229,6 +229,16 @@ class BatteryMonitorService : Service() {
             com.example.widget.NetraBatteryWidgetProvider.updateAllWidgets(this, telemetry)
         } catch (_: Exception) {}
 
+        // Evaluate Calibration progression
+        try {
+            NetraApplication.instance.calibrationManager.onTelemetryUpdate(telemetry)
+        } catch (_: Exception) {}
+
+        // Evaluate Dynamic Power Profile adjustments
+        try {
+            NetraApplication.instance.powerProfileManager.onTelemetryUpdate(telemetry)
+        } catch (_: Exception) {}
+
         // Update persistent notification
         updateForegroundNotification(telemetry)
 
