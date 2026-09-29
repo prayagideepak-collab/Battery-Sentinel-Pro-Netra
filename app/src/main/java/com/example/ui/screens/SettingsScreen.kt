@@ -29,11 +29,14 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DeviceThermostat
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.Button
@@ -50,6 +53,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -322,7 +326,85 @@ fun SettingsScreen(
             }
         }
 
-        // 5. Database & Telemetry Management
+        // 5. Automated Daily PDF Report Generator (Room Telemetry to Local PDF)
+        item {
+            var isGeneratingPdf by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            var lastGeneratedPdf by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<java.io.File?>(null) }
+
+            SentinelCard(
+                title = "Daily PDF Report Generator",
+                icon = Icons.Default.Description,
+                dotState = DotState.CONNECTED,
+                accentColor = NetraEmerald
+            ) {
+                Text(
+                    text = "Generates a comprehensive PDF document summarizing 24-hour battery health trends, energy efficiency cycles, and time-series recommendations.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            isGeneratingPdf = true
+                            viewModel.generateDailyPdfReport { file ->
+                                isGeneratingPdf = false
+                                lastGeneratedPdf = file
+                                if (file != null) {
+                                    Toast.makeText(context, "PDF Report saved: ${file.name}", Toast.LENGTH_LONG).show()
+                                    com.example.util.BatteryPdfReportGenerator.openPdfReport(context, file)
+                                } else {
+                                    Toast.makeText(context, "Failed to generate PDF report", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        enabled = !isGeneratingPdf,
+                        modifier = Modifier.weight(1f).testTag("generate_pdf_button"),
+                        colors = ButtonDefaults.buttonColors(containerColor = NetraEmerald, contentColor = Color.Black)
+                    ) {
+                        if (isGeneratingPdf) {
+                            androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.Black, strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Generating...", fontSize = 11.sp)
+                        } else {
+                            Icon(imageVector = Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Generate & View PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            if (lastGeneratedPdf != null) {
+                                com.example.util.BatteryPdfReportGenerator.sharePdfReport(context, lastGeneratedPdf!!)
+                            } else {
+                                isGeneratingPdf = true
+                                viewModel.generateDailyPdfReport { file ->
+                                    isGeneratingPdf = false
+                                    lastGeneratedPdf = file
+                                    if (file != null) {
+                                        com.example.util.BatteryPdfReportGenerator.sharePdfReport(context, file)
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f).testTag("share_pdf_button"),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NetraCyan)
+                    ) {
+                        Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Share PDF", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        // 6. Database & Telemetry Management
         item {
             SentinelCard(
                 title = "Local Room Database & Cache",

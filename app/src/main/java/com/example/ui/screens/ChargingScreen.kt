@@ -219,6 +219,15 @@ fun ChargingScreen(
             )
         }
 
+        // Time-Series Optimal Charging Window Advisor
+        item {
+            val records by viewModel.graphRecords.collectAsStateWithLifecycle()
+            com.example.ui.components.OptimalChargingWindowCard(
+                records = records,
+                sessions = sessions
+            )
+        }
+
         // Charging Sessions History (from Room Database)
         item {
             Row(

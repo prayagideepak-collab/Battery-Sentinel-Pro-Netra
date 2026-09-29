@@ -321,4 +321,38 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
             _isChatLoading.value = false
         }
     }
+
+    /**
+     * Generates and saves an automated daily PDF report from Room database telemetry
+     */
+    fun generateDailyPdfReport(onResult: (java.io.File?) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val records = allRecentRecords.value
+            val sessions = recentChargingSessions.value
+            val report = degradationReport.value
+            val telemetry = liveTelemetry.value
+
+            val pdfFile = com.example.util.BatteryPdfReportGenerator.generateDailyReport(
+                context = getApplication(),
+                records = records,
+                sessions = sessions,
+                degradationReport = report,
+                telemetry = telemetry
+            )
+
+            if (pdfFile != null) {
+                repository.logEvent(
+                    title = "Daily PDF Report Generated",
+                    message = "Saved to local storage: ${pdfFile.name} (${pdfFile.length() / 1024} KB)",
+                    category = "SYSTEM",
+                    severity = "SUCCESS",
+                    dotColor = "GREEN"
+                )
+            }
+
+            launch(Dispatchers.Main) {
+                onResult(pdfFile)
+            }
+        }
+    }
 }

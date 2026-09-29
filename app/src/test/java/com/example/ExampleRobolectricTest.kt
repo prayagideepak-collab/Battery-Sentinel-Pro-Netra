@@ -4,10 +4,12 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.ai.BatteryDegradationPredictor
 import com.example.ai.FailureRiskLevel
+import com.example.ai.OptimalChargingWindowAdvisor
 import com.example.data.local.BatteryRecord
 import com.example.data.local.ChargingSession
 import com.example.model.BatteryTelemetry
 import com.example.model.DotState
+import com.example.util.BatteryPdfReportGenerator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -62,5 +64,38 @@ class ExampleRobolectricTest {
         assertTrue(report.riskPercent > 0)
         assertTrue(report.estimatedCapacityHealthPercent in 50..100)
         assertNotNull(report.primaryRiskFactor)
+    }
+
+    @Test
+    fun `test time-series optimal charging window advisor`() {
+        val records = listOf(
+            BatteryRecord(level = 80, temperature = 28.0f, voltageMv = 4100, currentMa = 1500, powerWatts = 6.0f, isCharging = true, pluggedType = "AC", healthStatus = "GOOD")
+        )
+        val sessions = listOf(
+            ChargingSession(startTime = 1000L, endTime = 2000L, startLevel = 30, endLevel = 80, peakTemperature = 32.0f, avgPowerWatts = 7.0f, chargerType = "AC", durationMinutes = 40)
+        )
+
+        val suggestion = OptimalChargingWindowAdvisor.analyzeChargingHabitsAndSuggestWindows(records, sessions)
+        assertNotNull(suggestion.primaryOptimalWindow)
+        assertNotNull(suggestion.discouragedWindow)
+        assertEquals(24, suggestion.hourlyScores.size)
+    }
+
+    @Test
+    fun `test daily PDF report generator creation`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val records = listOf(
+            BatteryRecord(level = 80, temperature = 28.0f, voltageMv = 4100, currentMa = 1500, powerWatts = 6.0f, isCharging = true, pluggedType = "AC", healthStatus = "GOOD")
+        )
+        val sessions = listOf(
+            ChargingSession(startTime = 1000L, endTime = 2000L, startLevel = 30, endLevel = 80, peakTemperature = 32.0f, avgPowerWatts = 7.0f, chargerType = "AC", durationMinutes = 40)
+        )
+        val report = BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(records, sessions)
+        val telemetry = BatteryTelemetry(level = 80, isCharging = true)
+
+        val pdfFile = BatteryPdfReportGenerator.generateDailyReport(context, records, sessions, report, telemetry)
+        assertNotNull(pdfFile)
+        assertTrue(pdfFile!!.exists())
+        assertTrue(pdfFile.length() > 0)
     }
 }
