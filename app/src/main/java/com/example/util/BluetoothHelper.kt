@@ -54,7 +54,7 @@ object BluetoothHelper {
                         isConnected = true,
                         isPaired = true,
                         deviceType = deviceType(deviceClass),
-                        batteryPercent = readPublicBatteryLevel(device),
+                        batteryPercent = null, // No public Android API for remote Bluetooth battery level.
                         profile = profileLabel(deviceClass)
                     )
                 }
@@ -63,18 +63,6 @@ object BluetoothHelper {
             emptyList()
         } catch (_: Exception) {
             emptyList()
-        }
-    }
-
-    private fun readPublicBatteryLevel(device: BluetoothDevice): Int? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
-        return try {
-            val level = device.batteryLevel
-            level.takeIf { it in 0..100 }
-        } catch (_: SecurityException) {
-            null
-        } catch (_: UnsupportedOperationException) {
-            null
         }
     }
 

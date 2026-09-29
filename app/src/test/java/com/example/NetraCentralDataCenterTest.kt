@@ -11,6 +11,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -47,7 +48,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test same state repeated produces no duplicate events`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -78,7 +79,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test power connected followed by charging status yields single transition`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -107,7 +108,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test repeated power connected produces one canonical event`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -121,12 +122,12 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test charging to discharging transition`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
         dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 2500000, null, null)
-        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, android.os.BatteryManager.BATTERY_PLUGGED_NONE, 300, 4000, -500000, null, null)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 4000, -500000, null, null)
 
         job.cancel()
 
@@ -138,11 +139,11 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test discharging to charging transition`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
-        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, android.os.BatteryManager.BATTERY_PLUGGED_NONE, 300, 4000, -500000, null, null)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 4000, -500000, null, null)
         dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 2500000, null, null)
 
         job.cancel()
@@ -154,7 +155,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test same charging speed category repeated produces no SPEED_CHANGED event`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -171,7 +172,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test speed category changes produces exactly one SPEED_CHANGED event`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -211,7 +212,7 @@ class NetraCentralDataCenterTest {
                 dataCenter.processRawInput(
                     level = i, scale = 100,
                     status = android.os.BatteryManager.BATTERY_STATUS_DISCHARGING,
-                    plugged = android.os.BatteryManager.BATTERY_PLUGGED_NONE,
+                    plugged = 0,
                     temperatureRaw = 300 + i, voltage = 4000, currentMicroAmps = -500000,
                     bluetoothConnected = null, bluetoothBattery = null
                 )
