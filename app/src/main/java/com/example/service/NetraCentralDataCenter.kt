@@ -57,9 +57,9 @@ class NetraCentralDataCenter {
             }
 
             val isConnected = when {
-                plugged != 0 && plugged != -1 -> true
+                plugged == 0 -> false
+                plugged > 0 -> true
                 isCharging == true -> true
-                status == BatteryManager.BATTERY_STATUS_NOT_CHARGING -> false
                 else -> null
             }
 
