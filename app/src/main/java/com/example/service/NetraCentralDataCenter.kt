@@ -30,7 +30,6 @@ class NetraCentralDataCenter {
     private var lastConnectedState: Boolean? = null
     private var lastChargingState: Boolean? = null
     private var lastSpeedCategory: CanonicalChargingSpeed? = null
-    private var lastBatteryLevelBoundary: Int? = null
 
     suspend fun processRawInput(
         level: Int,
@@ -74,8 +73,9 @@ class NetraCentralDataCenter {
             val tempCelsius = if (temperatureRaw > 0) temperatureRaw / 10.0f else null
             val voltageMv = if (voltage > 0) voltage else null
 
+            // BatteryManager.BATTERY_PROPERTY_CURRENT_NOW is specified in microamps.
             val currentMa = if (currentMicroAmps != Int.MIN_VALUE && currentMicroAmps != 0) {
-                if (abs(currentMicroAmps) > 10_000) currentMicroAmps / 1000 else currentMicroAmps
+                currentMicroAmps / 1000
             } else null
 
             val powerWatts = if (voltageMv != null && currentMa != null) {
@@ -123,7 +123,7 @@ class NetraCentralDataCenter {
                     eventId = "event_${eventType}_$now",
                     eventType = eventType,
                     timestamp = now,
-                    previousValue = (!isConnected).toString(),
+                    previousValue = lastConnectedState?.toString(),
                     newValue = isConnected.toString(),
                     source = source
                 )
@@ -131,20 +131,35 @@ class NetraCentralDataCenter {
             }
 
             if (isCharging != null && isCharging != lastChargingState) {
+                val previousChargingState = lastChargingState
                 lastChargingState = isCharging
-                val eventType = when {
-                    isCharging -> NetraEventType.CHARGING_STARTED
-                    else -> NetraEventType.CHARGING_STOPPED
+                val eventType = if (isCharging) {
+                    NetraEventType.CHARGING_STARTED
+                } else {
+                    NetraEventType.CHARGING_STOPPED
                 }
-                val event = NetraCentralEvent(
-                    eventId = "event_${eventType}_$now",
-                    eventType = eventType,
-                    timestamp = now,
-                    previousValue = (!isCharging).toString(),
-                    newValue = isCharging.toString(),
-                    source = source
+                _centralEvents.emit(
+                    NetraCentralEvent(
+                        eventId = "event_${eventType}_$now",
+                        eventType = eventType,
+                        timestamp = now,
+                        previousValue = previousChargingState?.toString(),
+                        newValue = isCharging.toString(),
+                        source = source
+                    )
                 )
-                _centralEvents.emit(event)
+                if (!isCharging && previousChargingState == true) {
+                    _centralEvents.emit(
+                        NetraCentralEvent(
+                            eventId = "event_DISCHARGING_STARTED_$now",
+                            eventType = NetraEventType.DISCHARGING_STARTED,
+                            timestamp = now,
+                            previousValue = "true",
+                            newValue = "true",
+                            source = source
+                        )
+                    )
+                }
             }
 
             if (speedCategory != lastSpeedCategory && speedCategory != CanonicalChargingSpeed.UNAVAILABLE) {

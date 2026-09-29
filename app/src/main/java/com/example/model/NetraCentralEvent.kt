@@ -20,5 +20,6 @@ data class NetraCentralEvent(
     val timestamp: Long = System.currentTimeMillis(),
     val previousValue: String? = null,
     val newValue: String? = null,
-    val source: String = "BatteryMonitorService"
+    val source: String = "unknown",
+    val identityKey: String = eventId
 )
