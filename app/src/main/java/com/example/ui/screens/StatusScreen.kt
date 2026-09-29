@@ -88,6 +88,7 @@ import com.example.viewmodel.NetraViewModel
 fun StatusScreen(
     viewModel: NetraViewModel,
     onNavigateTab: (NetraTab) -> Unit,
+    onOpenGraph: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -693,7 +694,7 @@ fun StatusScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(
-                onClick = { onNavigateTab(NetraTab.GRAPH) },
+                onClick = onOpenGraph,
                 modifier = Modifier.fillMaxWidth().testTag("view_full_graph_button")
             ) {
                 Text("Open Interactive Telemetry Graph", fontSize = 12.sp)
