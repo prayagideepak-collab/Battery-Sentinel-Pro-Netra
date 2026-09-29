@@ -11,6 +11,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -47,7 +48,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test same state repeated produces no duplicate events`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -78,7 +79,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test power connected followed by charging status yields single transition`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -107,7 +108,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test repeated power connected produces one canonical event`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -121,7 +122,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test charging to discharging transition`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -138,7 +139,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test discharging to charging transition`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -154,7 +155,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test same charging speed category repeated produces no SPEED_CHANGED event`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
@@ -171,7 +172,7 @@ class NetraCentralDataCenterTest {
     @Test
     fun `test speed category changes produces exactly one SPEED_CHANGED event`() = runTest(testDispatcher) {
         val events = mutableListOf<NetraCentralEvent>()
-        val job = backgroundScope.launch(testDispatcher) {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             dataCenter.centralEvents.toList(events)
         }
 
