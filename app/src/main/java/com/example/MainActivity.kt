@@ -55,6 +55,7 @@ import com.example.ui.navigation.NetraTab
 import com.example.ui.screens.ChargingScreen
 import com.example.ui.screens.DevicesScreen
 import com.example.ui.screens.DischargingScreen
+import com.example.ui.screens.GraphScreen
 import com.example.ui.screens.MonitoringScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StatusScreen
@@ -95,6 +96,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainAppContent(viewModel: NetraViewModel) {
     var currentTab by remember { mutableStateOf(NetraTab.HOME) }
+    var showBatteryGraph by remember { mutableStateOf(false) }
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
@@ -119,8 +121,8 @@ fun MainAppContent(viewModel: NetraViewModel) {
     }
 
     // BackHandler: return to Home tab if on secondary tab
-    BackHandler(enabled = currentTab != NetraTab.HOME) {
-        currentTab = NetraTab.HOME
+    BackHandler(enabled = showBatteryGraph || currentTab != NetraTab.HOME) {
+        if (showBatteryGraph) showBatteryGraph = false else currentTab = NetraTab.HOME
     }
 
     Scaffold(
@@ -246,6 +248,7 @@ fun MainAppContent(viewModel: NetraViewModel) {
             NetraBottomNav(
                 currentTab = currentTab,
                 onTabSelected = { tab ->
+                    showBatteryGraph = false
                     currentTab = when (tab) {
                         NetraTab.HOME -> NetraTab.HOME
                         NetraTab.BATTERY -> NetraTab.BATTERY
@@ -271,13 +274,16 @@ fun MainAppContent(viewModel: NetraViewModel) {
             )
 
             Crossfade(
-                targetState = currentTab,
+                targetState = currentTab to showBatteryGraph,
                 label = "tab_transition",
                 modifier = Modifier.weight(1f)
-            ) { tab ->
-                when (tab) {
+            ) { (tab, graphVisible) ->
+                if (graphVisible) {
+                    GraphScreen(viewModel = viewModel)
+                } else when (tab) {
                     NetraTab.HOME -> StatusScreen(
                         viewModel = viewModel,
+                        onOpenGraph = { currentTab = NetraTab.BATTERY; showBatteryGraph = true },
                         onNavigateTab = { target ->
                             currentTab = when (target) {
                                 NetraTab.MONITORING -> NetraTab.MONITORING
