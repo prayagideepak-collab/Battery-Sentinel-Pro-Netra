@@ -9,7 +9,7 @@ enum class CanonicalChargingSpeed {
 }
 
 enum class CanonicalPluggedType {
-    AC, USB, WIRELESS, OTHER, NONE
+    AC, USB, WIRELESS, OTHER, NONE, UNKNOWN
 }
 
 data class NetraCentralState(
