@@ -38,6 +38,7 @@ class ExampleRobolectricTest {
             voltageMv = 4200,
             currentMa = 1500,
             powerWatts = 6.3f,
+            distanceTo40C = 3.5f,
             serviceDotState = DotState.CONNECTED
         )
 
@@ -156,5 +157,33 @@ class ExampleRobolectricTest {
         assertNotNull(status)
         assertNotNull(status.statusHeadline)
         assertNotNull(status.detailedAdvice)
+    }
+
+    @Test
+    fun `test battery telemetry CSV exporter format and generation`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val records = listOf(
+            BatteryRecord(level = 80, temperature = 28.0f, voltageMv = 4100, currentMa = 1500, powerWatts = 6.0f, isCharging = true, pluggedType = "AC", healthStatus = "GOOD")
+        )
+        val sessions = listOf(
+            ChargingSession(startTime = 1000L, endTime = 2000L, startLevel = 30, endLevel = 80, peakTemperature = 32.0f, avgPowerWatts = 7.0f, chargerType = "AC", durationMinutes = 40)
+        )
+
+        val csvFile = com.example.util.BatteryCsvExporter.exportTelemetryToCsv(context, records, sessions)
+        assertNotNull(csvFile)
+        assertTrue(csvFile!!.exists())
+        assertTrue(csvFile.length() > 0)
+        val text = csvFile.readText()
+        assertTrue(text.contains("BATTERY_TELEMETRY_RECORDS"))
+        assertTrue(text.contains("CHARGING_SESSIONS"))
+    }
+
+    @Test
+    fun `test degradation sparkline widget color and configuration`() {
+        val emeraldHex = com.example.widget.NetraDegradationSparklineWidgetProvider.getThemeColorHex("EMERALD")
+        assertEquals("#00E676", emeraldHex)
+
+        val amoledBg = com.example.widget.NetraDegradationSparklineWidgetProvider.getBgColorHex("AMOLED_BLACK")
+        assertEquals("#000000", amoledBg)
     }
 }

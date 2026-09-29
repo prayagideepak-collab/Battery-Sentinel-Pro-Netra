@@ -81,6 +81,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
     val totalRecords by viewModel.totalRecordCount.collectAsStateWithLifecycle()
     val permissions by viewModel.systemPermissions.collectAsStateWithLifecycle()
 
@@ -277,6 +278,25 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "One-Tap Ultra Battery Saver", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (settings.ultraBatterySaverActive) DangerRed else MaterialTheme.colorScheme.onSurface)
+                        Text(text = "Restricts background network & throttles UI animations to 0Hz", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = settings.ultraBatterySaverActive,
+                        onCheckedChange = { viewModel.toggleUltraBatterySaver() },
+                        colors = SwitchDefaults.colors(checkedThumbColor = DangerRed, checkedTrackColor = DangerRed.copy(alpha = 0.3f)),
+                        modifier = Modifier.testTag("ultra_battery_saver_toggle")
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(text = "Autonomous Power Saver Mode", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Text(text = "Throttles background poll interval to 300-600s", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -462,7 +482,32 @@ fun SettingsScreen(
             }
         }
 
-        // 6. About App & Update Channel
+        // 6. CSV Telemetry Export
+        item {
+            com.example.ui.components.CsvExportCard(
+                viewModel = viewModel,
+                totalRecords = totalRecords
+            )
+        }
+
+        // 7. Home Screen Widget Customization
+        item {
+            com.example.ui.components.WidgetCustomizationCard(
+                viewModel = viewModel,
+                settings = settings,
+                telemetry = telemetry
+            )
+        }
+
+        // 8. Voice Announcement & Alert Engine
+        item {
+            com.example.ui.components.AnnouncementSettingsCard(
+                viewModel = viewModel,
+                settings = settings
+            )
+        }
+
+        // 9. About App & Update Channel
         item {
             SentinelCard(
                 title = "About Netra - Battery Sentinel Pro",

@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -270,6 +271,120 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNightTargetWakeHour(hour: Int) {
         settingsRepository.setNightTargetWakeHour(hour)
+    }
+
+    fun setWidgetThemeColor(colorName: String) {
+        settingsRepository.setWidgetThemeColor(colorName)
+    }
+
+    fun setWidgetRefreshInterval(minutes: Int) {
+        settingsRepository.setWidgetRefreshInterval(minutes)
+    }
+
+    fun setWidgetBackgroundStyle(styleName: String) {
+        settingsRepository.setWidgetBackgroundStyle(styleName)
+    }
+
+    // Voice Announcement Engine Controls
+    fun setAnnouncementsMasterEnabled(enabled: Boolean) {
+        settingsRepository.setAnnouncementsMasterEnabled(enabled)
+    }
+
+    fun setAnnouncePhoneBattery(enabled: Boolean) {
+        settingsRepository.setAnnouncePhoneBattery(enabled)
+    }
+
+    fun setAnnounceBluetoothBattery(enabled: Boolean) {
+        settingsRepository.setAnnounceBluetoothBattery(enabled)
+    }
+
+    fun setAnnounceChargerConnected(enabled: Boolean) {
+        settingsRepository.setAnnounceChargerConnected(enabled)
+    }
+
+    fun setAnnounceChargingSpeed(enabled: Boolean) {
+        settingsRepository.setAnnounceChargingSpeed(enabled)
+    }
+
+    fun setAnnounceThermalWarning(enabled: Boolean) {
+        settingsRepository.setAnnounceThermalWarning(enabled)
+    }
+
+    fun setNightProtectionEnabled(enabled: Boolean) {
+        settingsRepository.setNightProtectionEnabled(enabled)
+    }
+
+    fun setNightSchedule(startHour: Int, endHour: Int) {
+        settingsRepository.setNightSchedule(startHour, endHour)
+    }
+
+    fun setMediaPlaybackHandlingEnabled(enabled: Boolean) {
+        settingsRepository.setMediaPlaybackHandlingEnabled(enabled)
+    }
+
+    fun testVoiceAnnouncement(sampleText: String? = null) {
+        val text = sampleText ?: if (liveTelemetry.value.isCharging) {
+            "C ${liveTelemetry.value.level} percent"
+        } else {
+            "D ${liveTelemetry.value.level} percent"
+        }
+        NetraApplication.instance.announcementEngine.speakDirect(text)
+    }
+
+    // One-Tap Ultra Battery Saver Toggle
+    fun toggleUltraBatterySaver() {
+        val current = settingsRepository.settings.value.ultraBatterySaverActive
+        val target = !current
+        settingsRepository.setUltraBatterySaverActive(target)
+
+        if (target) {
+            // Engage ultra saver profile & 0Hz animation restriction
+            NetraApplication.instance.powerProfileManager.setPowerProfile(
+                com.example.model.PowerProfileMode.ULTRA_SAVER,
+                liveTelemetry.value
+            )
+            settingsRepository.setPowerSaverEnabled(true)
+        } else {
+            // Restore smart adaptive profile
+            NetraApplication.instance.powerProfileManager.setPowerProfile(
+                com.example.model.PowerProfileMode.SMART_ADAPTIVE,
+                liveTelemetry.value
+            )
+        }
+
+        viewModelScope.launch {
+            repository.logEvent(
+                title = if (target) "⚡ Ultra Battery Saver Engaged" else "Ultra Battery Saver Disabled",
+                message = if (target) "Background network sync restricted, display capped to 30%, and UI animations throttled to 0Hz." else "Restored normal background sync and full animation refresh rates.",
+                category = "SYSTEM",
+                severity = if (target) "WARNING" else "INFO",
+                dotColor = if (target) "RED" else "GREEN"
+            )
+        }
+    }
+
+    // Export Telemetry to CSV
+    fun exportTelemetryCsv(context: android.content.Context, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val records = repository.getRecordsSince(0L).first()
+            val sessions = repository.recentChargingSessions.first()
+            val logs = repository.recentLogs.first()
+
+            val csvFile = com.example.util.BatteryCsvExporter.exportTelemetryToCsv(context, records, sessions, logs)
+            if (csvFile != null) {
+                com.example.util.BatteryCsvExporter.shareCsvFile(context, csvFile)
+                repository.logEvent(
+                    title = "Battery Telemetry Exported (CSV)",
+                    message = "Exported ${records.size} telemetry points and ${sessions.size} charging sessions to ${csvFile.name}.",
+                    category = "SYSTEM",
+                    severity = "INFO",
+                    dotColor = "BLUE"
+                )
+                onComplete(true)
+            } else {
+                onComplete(false)
+            }
+        }
     }
 
     fun clearDatabase() {
