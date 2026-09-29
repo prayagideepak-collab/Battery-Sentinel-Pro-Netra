@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer Shield Contour -->
+    <path
+        android:pathData="M54,22 C67,22 80,26 80,26 C80,48 74,72 54,86 C34,72 28,48 28,26 C28,26 41,22 54,22 Z"
+        android:strokeWidth="2.5"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="22"
+                android:endX="54"
+                android:endY="86"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#3300E5FF"/>
+                <item android:offset="1.0" android:color="#1100FFAA"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Battery Top Cap -->
+    <path
+        android:pathData="M49,30 L59,30 L59,33 L49,33 Z"
+        android:fillColor="#00E5FF" />
+
+    <!-- Battery Body Frame -->
+    <path
+        android:pathData="M42,33 L66,33 A3,3 0 0,1 69,36 L69,68 A3,3 0 0,1 66,71 L42,71 A3,3 0 0,1 39,68 L39,36 A3,3 0 0,1 42,33 Z"
+        android:strokeWidth="2"
+        android:strokeColor="#00E5FF"
+        android:fillColor="#151E28" />
+
+    <!-- Energy Bars / Eye Iris (Netra Sentinel) -->
+    <path
+        android:pathData="M43,58 L65,58 L65,67 L43,67 Z"
+        android:fillColor="#00E676" />
+    <path
+        android:pathData="M43,47 L65,47 L65,56 L43,56 Z"
+        android:fillColor="#00E676" />
+
+    <!-- Sentinel Eye Pupil / Lightning Core -->
+    <path
+        android:pathData="M56,36 L47,50 L53,50 L51,64 L61,48 L55,48 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Tech telemetry dot -->
+    <path
+        android:pathData="M54,78 A3,3 0 1,1 54,72 A3,3 0 1,1 54,78 Z"
+        android:fillColor="#00E5FF" />
+</vector>

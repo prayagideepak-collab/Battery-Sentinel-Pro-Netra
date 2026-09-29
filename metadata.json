@@ -1,0 +1,6 @@
+{
+  "name": "Battery Sentinel pro Netra",
+  "description": "Ultra-low power 24/7 intelligent battery & thermal monitoring sentinel with real-time telemetry, Room historical analytics, and Gemini AI health diagnostics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
