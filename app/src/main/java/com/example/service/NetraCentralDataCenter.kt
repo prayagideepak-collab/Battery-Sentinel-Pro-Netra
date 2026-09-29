@@ -23,7 +23,7 @@ class NetraCentralDataCenter {
     private val _centralState = MutableStateFlow(NetraCentralState())
     val centralState: StateFlow<NetraCentralState> = _centralState.asStateFlow()
 
-    private val _centralEvents = MutableSharedFlow<NetraCentralEvent>(replay = 50, extraBufferCapacity = 64)
+    private val _centralEvents = MutableSharedFlow<NetraCentralEvent>(extraBufferCapacity = 64)
     val centralEvents: SharedFlow<NetraCentralEvent> = _centralEvents.asSharedFlow()
 
     // Tracking for deduplication
@@ -48,7 +48,7 @@ class NetraCentralDataCenter {
             val now = System.currentTimeMillis()
 
             // 1. Validation & Normalization (No fake fallbacks)
-            val validatedLevel = if (level >= 0 && scale > 0) (level * 100) / scale else null
+            val validatedLevel = if (level in 0..scale && scale > 0) (level.toLong() * 100 / scale).toInt() else null
             val isCharging = when (status) {
                 BatteryManager.BATTERY_STATUS_CHARGING,
                 BatteryManager.BATTERY_STATUS_FULL -> true
@@ -68,7 +68,8 @@ class NetraCentralDataCenter {
                 BatteryManager.BATTERY_PLUGGED_AC -> CanonicalPluggedType.AC
                 BatteryManager.BATTERY_PLUGGED_USB -> CanonicalPluggedType.USB
                 BatteryManager.BATTERY_PLUGGED_WIRELESS -> CanonicalPluggedType.WIRELESS
-                else -> if (isCharging == true) CanonicalPluggedType.OTHER else CanonicalPluggedType.NONE
+                0 -> CanonicalPluggedType.NONE
+                else -> if (isCharging == true) CanonicalPluggedType.OTHER else CanonicalPluggedType.UNKNOWN
             }
 
             val tempCelsius = if (temperatureRaw > 0) temperatureRaw / 10.0f else null
@@ -118,13 +119,14 @@ class NetraCentralDataCenter {
 
             // 2. Deduplication & Event Generation
             if (isConnected != null && isConnected != lastConnectedState) {
+                val previousConnectedState = lastConnectedState
                 lastConnectedState = isConnected
                 val eventType = if (isConnected) NetraEventType.CHARGER_CONNECTED else NetraEventType.CHARGER_DISCONNECTED
                 val event = NetraCentralEvent(
                     eventId = "event_${eventType}_$now",
                     eventType = eventType,
                     timestamp = now,
-                    previousValue = lastConnectedState?.toString(),
+                    previousValue = previousConnectedState?.toString(),
                     newValue = isConnected.toString(),
                     source = source
                 )
@@ -163,7 +165,9 @@ class NetraCentralDataCenter {
                 }
             }
 
-            if (speedCategory != lastSpeedCategory && speedCategory != CanonicalChargingSpeed.UNAVAILABLE) {
+            if (speedCategory == CanonicalChargingSpeed.UNAVAILABLE) {
+                lastSpeedCategory = speedCategory
+            } else if (speedCategory != lastSpeedCategory) {
                 val prev = lastSpeedCategory?.name ?: "UNKNOWN"
                 lastSpeedCategory = speedCategory
                 val event = NetraCentralEvent(
