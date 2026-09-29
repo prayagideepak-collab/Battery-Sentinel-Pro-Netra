@@ -3,7 +3,6 @@ package com.example.ui.navigation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,8 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryAlert
@@ -41,20 +38,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.NetraCyan
 import com.example.ui.theme.NetraDarkBg
-import com.example.ui.theme.NetraEmerald
 import com.example.ui.theme.NetraSurface
 
 enum class NetraTab(val title: String, val icon: ImageVector, val tag: String) {
-    STATUS("Status", Icons.Default.Home, "tab_status"),
-    CHARGING("Charging", Icons.Default.Bolt, "tab_charging"),
-    DISCHARGING("Discharging", Icons.Default.BatteryAlert, "tab_discharging"),
-    APPS("Apps", Icons.Default.Widgets, "tab_apps"),
+    HOME("Home", Icons.Default.Home, "tab_home"),
+    BATTERY("Battery", Icons.Default.Bolt, "tab_battery"),
     MONITORING("Monitoring", Icons.Default.QueryStats, "tab_monitoring"),
     DEVICES("Devices", Icons.Default.Headset, "tab_devices"),
-    GRAPH("Graph", Icons.Default.ShowChart, "tab_graph"),
     SETTINGS("Settings", Icons.Default.Settings, "tab_settings"),
-    LOGS("Logs", Icons.Default.ListAlt, "tab_logs")
+    // Compat aliases
+    STATUS("Home", Icons.Default.Home, "tab_home"),
+    CHARGING("Battery", Icons.Default.Bolt, "tab_charging"),
+    DISCHARGING("Battery", Icons.Default.BatteryAlert, "tab_discharging"),
+    APPS("Monitoring", Icons.Default.Widgets, "tab_apps"),
+    GRAPH("Monitoring", Icons.Default.ShowChart, "tab_graph"),
+    LOGS("Monitoring", Icons.Default.ListAlt, "tab_logs")
 }
+
+val BOTTOM_TABS = listOf(
+    NetraTab.HOME,
+    NetraTab.BATTERY,
+    NetraTab.MONITORING,
+    NetraTab.DEVICES,
+    NetraTab.SETTINGS
+)
 
 @Composable
 fun NetraBottomNav(
@@ -62,8 +69,6 @@ fun NetraBottomNav(
     onTabSelected: (NetraTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scrollState = rememberScrollState()
-
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -74,17 +79,21 @@ fun NetraBottomNav(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(scrollState)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            NetraTab.values().forEach { tab ->
-                val isSelected = tab == currentTab
-                val accent = if (tab == NetraTab.CHARGING) NetraCyan else NetraEmerald
+            BOTTOM_TABS.forEach { tab ->
+                val isSelected = tab == currentTab ||
+                        (currentTab == NetraTab.STATUS && tab == NetraTab.HOME) ||
+                        ((currentTab == NetraTab.CHARGING || currentTab == NetraTab.DISCHARGING) && tab == NetraTab.BATTERY) ||
+                        ((currentTab == NetraTab.APPS || currentTab == NetraTab.GRAPH || currentTab == NetraTab.LOGS) && tab == NetraTab.MONITORING)
+
+                val accent = NetraCyan
 
                 Box(
                     modifier = Modifier
+                        .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
                             if (isSelected) accent.copy(alpha = 0.18f)
@@ -97,23 +106,24 @@ fun NetraBottomNav(
                             RoundedCornerShape(12.dp)
                         )
                         .clickable { onTabSelected(tab) }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .padding(vertical = 10.dp)
                         .testTag(tab.tag),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = tab.icon,
                             contentDescription = tab.title,
                             tint = if (isSelected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(22.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = tab.title,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) accent else MaterialTheme.colorScheme.onSurfaceVariant
                         )

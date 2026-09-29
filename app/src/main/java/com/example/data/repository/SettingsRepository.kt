@@ -17,7 +17,22 @@ data class SentinelSettings(
     val notificationEnabled: Boolean = true,
     val soundAlertEnabled: Boolean = true,
     val nightChargingThrottleEnabled: Boolean = true,
-    val nightTargetWakeHour: Int = 7 // 07:00 AM predicted wake
+    val nightTargetWakeHour: Int = 7, // 07:00 AM predicted wake
+    val ultraBatterySaverActive: Boolean = false,
+    val widgetThemeColor: String = "CYAN", // CYAN, EMERALD, AMBER, RED, PURPLE, MONO
+    val widgetRefreshIntervalMinutes: Int = 0, // 0 = Real-time event-driven, 1, 5, 15, 30
+    val widgetBackgroundStyle: String = "GLASS_DARK", // GLASS_DARK, AMOLED_BLACK, TRANSLUCENT
+    // Voice Announcement Engine Settings
+    val announcementsMasterEnabled: Boolean = true,
+    val announcePhoneBattery: Boolean = true,
+    val announceBluetoothBattery: Boolean = true,
+    val announceChargerConnected: Boolean = true,
+    val announceChargingSpeed: Boolean = true,
+    val announceThermalWarning: Boolean = true,
+    val nightProtectionEnabled: Boolean = true,
+    val nightStartHour: Int = 23, // 11:00 PM
+    val nightEndHour: Int = 6,    // 06:00 AM
+    val mediaPlaybackHandlingEnabled: Boolean = true
 )
 
 class SettingsRepository(context: Context) {
@@ -38,7 +53,21 @@ class SettingsRepository(context: Context) {
             notificationEnabled = prefs.getBoolean("notif_enabled", true),
             soundAlertEnabled = prefs.getBoolean("sound_enabled", true),
             nightChargingThrottleEnabled = prefs.getBoolean("night_charging_throttle", true),
-            nightTargetWakeHour = prefs.getInt("night_target_wake_hour", 7)
+            nightTargetWakeHour = prefs.getInt("night_target_wake_hour", 7),
+            ultraBatterySaverActive = prefs.getBoolean("ultra_battery_saver", false),
+            widgetThemeColor = prefs.getString("widget_theme_color", "CYAN") ?: "CYAN",
+            widgetRefreshIntervalMinutes = prefs.getInt("widget_refresh_interval", 0),
+            widgetBackgroundStyle = prefs.getString("widget_bg_style", "GLASS_DARK") ?: "GLASS_DARK",
+            announcementsMasterEnabled = prefs.getBoolean("announcements_master", true),
+            announcePhoneBattery = prefs.getBoolean("announce_phone_battery", true),
+            announceBluetoothBattery = prefs.getBoolean("announce_bt_battery", true),
+            announceChargerConnected = prefs.getBoolean("announce_charger_connected", true),
+            announceChargingSpeed = prefs.getBoolean("announce_charging_speed", true),
+            announceThermalWarning = prefs.getBoolean("announce_thermal_warning", true),
+            nightProtectionEnabled = prefs.getBoolean("night_protection_enabled", true),
+            nightStartHour = prefs.getInt("night_start_hour", 23),
+            nightEndHour = prefs.getInt("night_end_hour", 6),
+            mediaPlaybackHandlingEnabled = prefs.getBoolean("media_playback_handling", true)
         )
     }
 
@@ -85,5 +114,70 @@ class SettingsRepository(context: Context) {
     fun setNightTargetWakeHour(hour: Int) {
         prefs.edit().putInt("night_target_wake_hour", hour).apply()
         _settings.value = _settings.value.copy(nightTargetWakeHour = hour)
+    }
+
+    fun setUltraBatterySaverActive(active: Boolean) {
+        prefs.edit().putBoolean("ultra_battery_saver", active).apply()
+        _settings.value = _settings.value.copy(ultraBatterySaverActive = active)
+    }
+
+    fun setWidgetThemeColor(colorName: String) {
+        prefs.edit().putString("widget_theme_color", colorName).apply()
+        _settings.value = _settings.value.copy(widgetThemeColor = colorName)
+    }
+
+    fun setWidgetRefreshInterval(minutes: Int) {
+        prefs.edit().putInt("widget_refresh_interval", minutes).apply()
+        _settings.value = _settings.value.copy(widgetRefreshIntervalMinutes = minutes)
+    }
+
+    fun setWidgetBackgroundStyle(styleName: String) {
+        prefs.edit().putString("widget_bg_style", styleName).apply()
+        _settings.value = _settings.value.copy(widgetBackgroundStyle = styleName)
+    }
+
+    fun setAnnouncementsMasterEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("announcements_master", enabled).apply()
+        _settings.value = _settings.value.copy(announcementsMasterEnabled = enabled)
+    }
+
+    fun setAnnouncePhoneBattery(enabled: Boolean) {
+        prefs.edit().putBoolean("announce_phone_battery", enabled).apply()
+        _settings.value = _settings.value.copy(announcePhoneBattery = enabled)
+    }
+
+    fun setAnnounceBluetoothBattery(enabled: Boolean) {
+        prefs.edit().putBoolean("announce_bt_battery", enabled).apply()
+        _settings.value = _settings.value.copy(announceBluetoothBattery = enabled)
+    }
+
+    fun setAnnounceChargerConnected(enabled: Boolean) {
+        prefs.edit().putBoolean("announce_charger_connected", enabled).apply()
+        _settings.value = _settings.value.copy(announceChargerConnected = enabled)
+    }
+
+    fun setAnnounceChargingSpeed(enabled: Boolean) {
+        prefs.edit().putBoolean("announce_charging_speed", enabled).apply()
+        _settings.value = _settings.value.copy(announceChargingSpeed = enabled)
+    }
+
+    fun setAnnounceThermalWarning(enabled: Boolean) {
+        prefs.edit().putBoolean("announce_thermal_warning", enabled).apply()
+        _settings.value = _settings.value.copy(announceThermalWarning = enabled)
+    }
+
+    fun setNightProtectionEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("night_protection_enabled", enabled).apply()
+        _settings.value = _settings.value.copy(nightProtectionEnabled = enabled)
+    }
+
+    fun setNightSchedule(startHour: Int, endHour: Int) {
+        prefs.edit().putInt("night_start_hour", startHour).putInt("night_end_hour", endHour).apply()
+        _settings.value = _settings.value.copy(nightStartHour = startHour, nightEndHour = endHour)
+    }
+
+    fun setMediaPlaybackHandlingEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("media_playback_handling", enabled).apply()
+        _settings.value = _settings.value.copy(mediaPlaybackHandlingEnabled = enabled)
     }
 }

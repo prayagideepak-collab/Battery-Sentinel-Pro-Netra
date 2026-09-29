@@ -15,6 +15,7 @@ import android.os.IBinder
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.NetraApplication
@@ -36,6 +37,7 @@ class BatteryMonitorService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var lifecyclePolling: LifecycleAwarePolling
+    private var isReceiverRegistered = false
     private var lastTemp: Float = 0f
     private var lastTempTimestamp: Long = 0L
     private var lastNotified80PercentSession = false
@@ -44,13 +46,39 @@ class BatteryMonitorService : Service() {
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
-                processBatteryChangedIntent(intent)
-            } else if (intent?.action == Intent.ACTION_POWER_CONNECTED) {
-                lastNotified80PercentSession = false
-            } else if (intent?.action == Intent.ACTION_POWER_DISCONNECTED) {
-                lastNotified80PercentSession = false
+            when (intent?.action) {
+                Intent.ACTION_BATTERY_CHANGED -> processBatteryChangedIntent(intent)
+                Intent.ACTION_POWER_CONNECTED -> lastNotified80PercentSession = false
+                Intent.ACTION_POWER_DISCONNECTED -> {
+                    lastNotified80PercentSession = false
+                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    notificationManager.cancel(NOTIFICATION_ALARM_ID)
+                }
+                ACTION_DISMISS_ALARM -> {
+                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    notificationManager.cancel(NOTIFICATION_ALARM_ID)
+                }
+                ACTION_SET_TARGET_100 -> {
+                    NetraApplication.instance.settingsRepository.updateChargeTarget(100)
+                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    notificationManager.cancel(NOTIFICATION_ALARM_ID)
+                }
+                android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED,
+                android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED,
+                android.bluetooth.BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED,
+                android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                    checkBluetoothUpdates()
+                }
             }
+        }
+    }
+
+    private fun checkBluetoothUpdates() {
+        serviceScope.launch {
+            try {
+                val devices = com.example.util.BluetoothHelper.getBluetoothDevices(this@BatteryMonitorService)
+                NetraApplication.instance.announcementEngine.onBluetoothDevicesUpdate(devices)
+            } catch (_: Exception) {}
         }
     }
 
@@ -59,28 +87,75 @@ class BatteryMonitorService : Service() {
         createNotificationChannels()
         startForeground(NOTIFICATION_ID, buildSentinelNotification(BatteryTelemetry()))
 
-        lifecyclePolling = LifecycleAwarePolling(this) { isScreenOn, isPowerSave ->
-            val current = _liveTelemetryFlow.value
-            _liveTelemetryFlow.value = current.copy(
-                isScreenOn = isScreenOn,
-                isPowerSaverActive = isPowerSave
-            )
-        }
-        lifecyclePolling.start()
+        startCollectorsAndPolling()
+        startLifecycleSupervisor()
+    }
 
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_BATTERY_CHANGED)
-            addAction(Intent.ACTION_POWER_CONNECTED)
-            addAction(Intent.ACTION_POWER_DISCONNECTED)
-            addAction(Intent.ACTION_BATTERY_LOW)
-            addAction(Intent.ACTION_BATTERY_OKAY)
+    private fun startCollectorsAndPolling() {
+        try {
+            if (!::lifecyclePolling.isInitialized) {
+                lifecyclePolling = LifecycleAwarePolling(this) { isScreenOn, isPowerSave ->
+                    val current = _liveTelemetryFlow.value
+                    _liveTelemetryFlow.value = current.copy(
+                        isScreenOn = isScreenOn,
+                        isPowerSaverActive = isPowerSave
+                    )
+                    if (isScreenOn) {
+                        checkBluetoothUpdates()
+                    }
+                }
+            }
+            lifecyclePolling.start()
+        } catch (e: Exception) {
+            Log.e("BatteryMonitorService", "Error starting lifecycle polling", e)
         }
-        registerReceiver(batteryReceiver, filter)
+
+        if (!isReceiverRegistered) {
+            try {
+                val filter = IntentFilter().apply {
+                    addAction(Intent.ACTION_BATTERY_CHANGED)
+                    addAction(Intent.ACTION_POWER_CONNECTED)
+                    addAction(Intent.ACTION_POWER_DISCONNECTED)
+                    addAction(Intent.ACTION_BATTERY_LOW)
+                    addAction(Intent.ACTION_BATTERY_OKAY)
+                    addAction(ACTION_DISMISS_ALARM)
+                    addAction(ACTION_SET_TARGET_100)
+                    addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED)
+                    addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED)
+                    addAction(android.bluetooth.BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED)
+                    addAction(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    registerReceiver(batteryReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                } else {
+                    registerReceiver(batteryReceiver, filter)
+                }
+                isReceiverRegistered = true
+            } catch (e: Exception) {
+                Log.e("BatteryMonitorService", "Error registering battery receiver", e)
+            }
+        }
 
         // Initial check via sticky intent
-        val initialIntent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        if (initialIntent != null) {
-            processBatteryChangedIntent(initialIntent)
+        try {
+            val initialIntent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            if (initialIntent != null) {
+                processBatteryChangedIntent(initialIntent)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun startLifecycleSupervisor() {
+        serviceScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(45_000L) // check every 45 seconds
+                try {
+                    // Ensure collectors are active and restart if stopped without spawning duplicates
+                    startCollectorsAndPolling()
+                } catch (e: Exception) {
+                    Log.e("BatteryMonitorService", "Supervisor check failed", e)
+                }
+            }
         }
     }
 
@@ -239,6 +314,16 @@ class BatteryMonitorService : Service() {
             NetraApplication.instance.powerProfileManager.onTelemetryUpdate(telemetry)
         } catch (_: Exception) {}
 
+        // Evaluate Voice Announcements Engine
+        try {
+            NetraApplication.instance.announcementEngine.onTelemetryUpdate(telemetry)
+        } catch (_: Exception) {}
+
+        // Evaluate Telemetry & Runtime Sentinel health supervision
+        try {
+            NetraApplication.instance.telemetrySentinel.onTelemetryReceived(telemetry)
+        } catch (_: Exception) {}
+
         // Update persistent notification
         updateForegroundNotification(telemetry)
 
@@ -342,19 +427,46 @@ class BatteryMonitorService : Service() {
 
     private fun sendUnplugAlarmNotification(level: Int, target: Int) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val intent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this, 101, intent,
+        
+        // Open App Intent
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingOpenApp = PendingIntent.getActivity(
+            this, 101, openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Action 1: Dismiss / Mute Alarm Broadcast
+        val dismissIntent = Intent(ACTION_DISMISS_ALARM)
+        val pendingDismiss = PendingIntent.getBroadcast(
+            this, 201, dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Action 2: Set Target to 100% (Continue Charging)
+        val continueIntent = Intent(ACTION_SET_TARGET_100)
+        val pendingContinue = PendingIntent.getBroadcast(
+            this, 202, continueIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ALERTS_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("🔋 Battery Target Reached ($level%)")
-            .setContentText("Target of $target% reached. Disconnect charger to protect battery health.")
+            .setContentTitle("⚡ Healthy 80% Target Reached ($level%)")
+            .setContentText("Target of $target% reached. Disconnect now to extend lithium lifespan by 3x.")
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("Your battery reached the optimal $level% charge limit! Disconnecting the charger now prevents high-voltage cathode oxidation, reduces thermal dwell, and extends battery lifespan by up to 300%.")
+                    .setSummaryText("Electrochemical Longevity Recommendation")
+            )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(pendingOpenApp)
+            .addAction(R.drawable.ic_launcher_foreground, "Dismiss Alarm", pendingDismiss)
+            .addAction(R.drawable.ic_launcher_foreground, "Charge to 100%", pendingContinue)
+            .addAction(R.drawable.ic_launcher_foreground, "View Health", pendingOpenApp)
             .build()
 
         notificationManager.notify(NOTIFICATION_ALARM_ID, notification)
@@ -473,10 +585,13 @@ class BatteryMonitorService : Service() {
         try {
             unregisterReceiver(batteryReceiver)
         } catch (_: Exception) {}
+        isReceiverRegistered = false
         serviceScope.cancel()
     }
 
     companion object {
+        const val ACTION_DISMISS_ALARM = "com.example.ACTION_DISMISS_ALARM"
+        const val ACTION_SET_TARGET_100 = "com.example.ACTION_SET_TARGET_100"
         const val CHANNEL_SERVICE_ID = "netra_service_channel"
         const val CHANNEL_ALERTS_ID = "netra_alerts_channel"
         const val NOTIFICATION_ID = 2001
@@ -488,12 +603,18 @@ class BatteryMonitorService : Service() {
         val liveTelemetryFlow: StateFlow<BatteryTelemetry> = _liveTelemetryFlow.asStateFlow()
 
         fun startService(context: Context) {
-            val intent = Intent(context, BatteryMonitorService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            try {
+                val intent = Intent(context, BatteryMonitorService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    try {
+                        context.startForegroundService(intent)
+                    } catch (e: Exception) {
+                        context.startService(intent)
+                    }
+                } else {
+                    context.startService(intent)
+                }
+            } catch (_: Exception) {}
         }
     }
 }

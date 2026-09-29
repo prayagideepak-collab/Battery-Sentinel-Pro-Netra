@@ -23,17 +23,27 @@ class NetraApplication : Application() {
     lateinit var powerProfileManager: com.example.ai.PowerProfileManager
         private set
 
+    lateinit var announcementEngine: com.example.service.AnnouncementEngine
+        private set
+
+    lateinit var telemetrySentinel: com.example.service.TelemetrySentinel
+        private set
+
     override fun onCreate() {
         super.onCreate()
         instance = this
         database = NetraDatabase.getDatabase(this)
         settingsRepository = SettingsRepository(this)
+        announcementEngine = com.example.service.AnnouncementEngine(this)
+        telemetrySentinel = com.example.service.TelemetrySentinel(this)
         calibrationManager = com.example.ai.BatteryCalibrationManager(this)
         powerProfileManager = com.example.ai.PowerProfileManager(this)
         batteryRepository = BatteryRepository(database.batteryDao(), database.chargingSessionDao(), database.activityLogDao())
 
-        // Start 24/7 low-power service
-        BatteryMonitorService.startService(this)
+        // Start 24/7 low-power service safely
+        try {
+            BatteryMonitorService.startService(this)
+        } catch (_: Exception) {}
     }
 
     companion object {

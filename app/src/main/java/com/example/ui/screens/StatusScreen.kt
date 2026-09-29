@@ -43,15 +43,19 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,6 +83,7 @@ import com.example.ui.theme.StatusRed
 import com.example.util.UsageStatsHelper
 import com.example.viewmodel.NetraViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatusScreen(
     viewModel: NetraViewModel,
@@ -86,6 +91,9 @@ fun StatusScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var showQuickActionsSheet by remember { mutableStateOf(false) }
+    val quickActionsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val sparklineRecords by viewModel.sparkline1HourRecords.collectAsStateWithLifecycle()
@@ -295,6 +303,31 @@ fun StatusScreen(
             onCancelCalibration = { viewModel.cancelCalibration() },
             onAdvanceStep = { viewModel.advanceCalibrationStep() }
         )
+
+        // Quick Drain Actions Master Trigger Card
+        SentinelCard(
+            title = "Quick Power Savers",
+            icon = Icons.Default.Bolt,
+            dotState = if (settings.ultraBatterySaverActive) DotState.THROTTLED else DotState.CONNECTED,
+            accentColor = NetraCyan,
+            trailingAction = {
+                Button(
+                    onClick = { showQuickActionsSheet = true },
+                    modifier = Modifier.testTag("open_quick_actions_button"),
+                    colors = ButtonDefaults.buttonColors(containerColor = NetraCyan, contentColor = Color.Black)
+                ) {
+                    Icon(imageVector = Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Quick Toggles", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        ) {
+            Text(
+                text = "Instant toggles to shut off battery-draining radios (Bluetooth, Wi-Fi search, GPS location polling, background account sync, and 0Hz animations).",
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         // Dynamic Power-Saving Profile System
         val profileState by viewModel.powerProfileState.collectAsStateWithLifecycle()
@@ -667,6 +700,12 @@ fun StatusScreen(
             }
         }
 
+        // CSV Telemetry Export Card
+        com.example.ui.components.CsvExportCard(
+            viewModel = viewModel,
+            totalRecords = totalRecords
+        )
+
         // J. Activity & Updates
         SentinelCard(
             title = "Activity & Updates",
@@ -691,6 +730,14 @@ fun StatusScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+    }
+
+    if (showQuickActionsSheet) {
+        com.example.ui.components.QuickDrainActionsBottomSheet(
+            viewModel = viewModel,
+            sheetState = quickActionsSheetState,
+            onDismiss = { showQuickActionsSheet = false }
+        )
     }
 }
 
