@@ -119,7 +119,7 @@ fun MainAppContent(viewModel: NetraViewModel) {
     }
 
     // BackHandler: return to Home tab if on secondary tab
-    BackHandler(enabled = currentTab != NetraTab.HOME && currentTab != NetraTab.STATUS) {
+    BackHandler(enabled = currentTab != NetraTab.HOME) {
         currentTab = NetraTab.HOME
     }
 
@@ -247,9 +247,9 @@ fun MainAppContent(viewModel: NetraViewModel) {
                 currentTab = currentTab,
                 onTabSelected = { tab ->
                     currentTab = when (tab) {
-                        NetraTab.HOME, NetraTab.STATUS -> NetraTab.HOME
-                        NetraTab.BATTERY, NetraTab.CHARGING, NetraTab.DISCHARGING -> NetraTab.BATTERY
-                        NetraTab.MONITORING, NetraTab.APPS, NetraTab.GRAPH, NetraTab.LOGS -> NetraTab.MONITORING
+                        NetraTab.HOME -> NetraTab.HOME
+                        NetraTab.BATTERY -> NetraTab.BATTERY
+                        NetraTab.MONITORING -> NetraTab.MONITORING
                         NetraTab.DEVICES -> NetraTab.DEVICES
                         NetraTab.SETTINGS -> NetraTab.SETTINGS
                     }
@@ -276,25 +276,26 @@ fun MainAppContent(viewModel: NetraViewModel) {
                 modifier = Modifier.weight(1f)
             ) { tab ->
                 when (tab) {
-                    NetraTab.HOME, NetraTab.STATUS -> StatusScreen(
+                    NetraTab.HOME -> StatusScreen(
                         viewModel = viewModel,
                         onNavigateTab = { target ->
                             currentTab = when (target) {
-                                NetraTab.MONITORING, NetraTab.APPS, NetraTab.GRAPH, NetraTab.LOGS -> NetraTab.MONITORING
+                                NetraTab.MONITORING -> NetraTab.MONITORING
                                 NetraTab.DEVICES -> NetraTab.DEVICES
-                                NetraTab.BATTERY, NetraTab.CHARGING, NetraTab.DISCHARGING -> NetraTab.BATTERY
-                                else -> NetraTab.HOME
+                                NetraTab.BATTERY -> NetraTab.BATTERY
+                                NetraTab.HOME -> NetraTab.HOME
+                                NetraTab.SETTINGS -> NetraTab.SETTINGS
                             }
                         }
                     )
-                    NetraTab.BATTERY, NetraTab.CHARGING, NetraTab.DISCHARGING -> {
+                    NetraTab.BATTERY -> {
                         if (telemetry.isCharging) {
                             ChargingScreen(viewModel = viewModel)
                         } else {
                             DischargingScreen(viewModel = viewModel)
                         }
                     }
-                    NetraTab.MONITORING, NetraTab.APPS, NetraTab.GRAPH, NetraTab.LOGS -> MonitoringScreen(viewModel = viewModel)
+                    NetraTab.MONITORING -> MonitoringScreen(viewModel = viewModel)
                     NetraTab.DEVICES -> DevicesScreen(viewModel = viewModel)
                     NetraTab.SETTINGS -> SettingsScreen(viewModel = viewModel)
                 }
