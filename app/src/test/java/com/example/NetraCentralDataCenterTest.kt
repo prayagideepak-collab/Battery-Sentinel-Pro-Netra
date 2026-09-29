@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.model.CanonicalPluggedType
 import com.example.model.CanonicalChargingSpeed
 import com.example.model.NetraCentralEvent
 import com.example.model.NetraEventType
@@ -184,6 +185,53 @@ class NetraCentralDataCenterTest {
         job.cancel()
 
         assertEquals(2, events.count { it.eventType == NetraEventType.SPEED_CHANGED })
+    }
+
+    @Test
+    fun `test connected event keeps the actual previous value`() = runTest(testDispatcher) {
+        val events = mutableListOf<NetraCentralEvent>()
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            dataCenter.centralEvents.toList(events)
+        }
+
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 4000, -500000, null, null)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 0, null, null)
+
+        val connected = events.single { it.eventType == NetraEventType.CHARGER_CONNECTED }
+        assertEquals("false", connected.previousValue)
+        assertEquals("true", connected.newValue)
+        assertEquals(false, dataCenter.centralState.value.isCharging)
+        job.cancel()
+    }
+
+    @Test
+    fun `test unknown plug and invalid level stay unavailable`() = runTest(testDispatcher) {
+        dataCenter.processRawInput(Int.MAX_VALUE, 100, android.os.BatteryManager.BATTERY_STATUS_UNKNOWN, -1, 0, 0, 0, null, null)
+        val state = dataCenter.centralState.value
+        assertNull(state.batteryLevel)
+        assertNull(state.isChargerConnected)
+        assertEquals(CanonicalPluggedType.UNKNOWN, state.pluggedType)
+    }
+
+    @Test
+    fun `test charging speed reappearing after unavailable emits a change`() = runTest(testDispatcher) {
+        val events = mutableListOf<NetraCentralEvent>()
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            dataCenter.centralEvents.toList(events)
+        }
+
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 3000000, null, null)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_UNKNOWN, -1, 0, 0, 0, null, null)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 3000000, null, null)
+
+        assertEquals(2, events.count { it.eventType == NetraEventType.SPEED_CHANGED })
+        job.cancel()
+    }
+
+    @Test
+    fun `test stale canonical transitions are not replayed to new collectors`() = runTest(testDispatcher) {
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 3000000, null, null)
+        assertEquals(0, dataCenter.centralEvents.replayCache.size)
     }
 
     @Test
