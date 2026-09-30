@@ -32,3 +32,9 @@ data class NetraCentralState(
     val lastUpdateTimestamp: Long = 0L,
     val isDataFresh: Boolean = false
 )
+
+/** The legacy non-null telemetry model may only receive a complete hardware sample. */
+fun NetraCentralState.hasCompleteLegacyReading(): Boolean =
+    batteryLevel != null && isCharging != null &&
+        temperatureCelsius != null && voltageMv != null &&
+        currentMa != null && powerWatts != null
