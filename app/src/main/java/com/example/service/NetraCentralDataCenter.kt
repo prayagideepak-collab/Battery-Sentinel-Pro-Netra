@@ -19,6 +19,7 @@ import kotlin.math.abs
 class NetraCentralDataCenter {
 
     private val mutex = Mutex()
+    private val chargingSpeedEngine = ChargingSpeedEngine()
 
     private val _centralState = MutableStateFlow(NetraCentralState())
     val centralState: StateFlow<NetraCentralState> = _centralState.asStateFlow()
@@ -91,61 +92,13 @@ class NetraCentralDataCenter {
                 currentMicroAmps / 1000
             } else null
 
-            // Power calculations:
-            // Net battery power (W) = Voltage(mV) * current(mA) / 1,000,000
-            val batteryPowerWatts = if (voltageMv != null && currentMa != null) {
-                (voltageMv.toFloat() * currentMa.toFloat()) / 1_000_000f
-            } else null
-
-            // Estimate system consumption (default ~3.0W or derived from negative current when discharging)
-            val consumptionWatts = if (currentMa != null && currentMa < 0 && voltageMv != null) {
-                abs(voltageMv.toFloat() * currentMa.toFloat()) / 1_000_000f
-            } else {
-                3.0f // baseline system consumption load
-            }
-
-            val rawPowerWatts = if (isCharging == true) {
-                val net = if (batteryPowerWatts != null && batteryPowerWatts > 0) batteryPowerWatts else 0f
-                net + consumptionWatts
-            } else if (batteryPowerWatts != null && batteryPowerWatts < 0) {
-                0f // discharging has 0 raw incoming charging power
-            } else {
-                null
-            }
-
-            val netPowerWatts = if (isCharging == true) {
-                batteryPowerWatts?.coerceAtLeast(0f)
-            } else if (batteryPowerWatts != null) {
-                batteryPowerWatts // negative when discharging
-            } else {
-                null
-            }
-
-            // Charging Speed Categories based on RAW incoming power:
-            // <5W = Slow, 5W to <10W = Normal, 10W to <=20W = Fast, >20W = Ultra Fast
-            val speedCategory = if (isCharging == true && rawPowerWatts != null) {
-                when {
-                    rawPowerWatts > 20.0f -> CanonicalChargingSpeed.ULTRA_FAST
-                    rawPowerWatts >= 10.0f -> CanonicalChargingSpeed.FAST
-                    rawPowerWatts >= 5.0f -> CanonicalChargingSpeed.NORMAL
-                    else -> CanonicalChargingSpeed.SLOW
-                }
-            } else {
-                CanonicalChargingSpeed.UNAVAILABLE
-            }
-
-            // Announcement Speed Categories based on NET effective power:
-            val effectiveNetPower = netPowerWatts ?: 0f
-            val announcementCategory = if (isCharging == true && netPowerWatts != null) {
-                when {
-                    effectiveNetPower > 20.0f -> CanonicalChargingSpeed.ULTRA_FAST
-                    effectiveNetPower >= 10.0f -> CanonicalChargingSpeed.FAST
-                    effectiveNetPower >= 5.0f -> CanonicalChargingSpeed.NORMAL
-                    else -> CanonicalChargingSpeed.SLOW
-                }
-            } else {
-                CanonicalChargingSpeed.UNAVAILABLE
-            }
+            // Central ChargingSpeedEngine calculation
+            val speedResult = chargingSpeedEngine.calculate(isCharging, voltageMv, currentMa)
+            val rawPowerWatts = speedResult.rawPowerWatts
+            val netPowerWatts = speedResult.netPowerWatts
+            val consumptionWatts = speedResult.consumptionPowerWatts
+            val speedCategory = speedResult.speedCategory
+            val announcementCategory = speedResult.announcementCategory
 
             // Session Timestamp tracking
             if (isConnected != null && isConnected != lastConnectedState) {
@@ -166,8 +119,6 @@ class NetraCentralDataCenter {
                     dischargingStartedAt = null
                 } else {
                     chargingStoppedAt = now
-                    chargingStartedAt = null
-                    dischargingStartedAt = now
                 }
             }
 

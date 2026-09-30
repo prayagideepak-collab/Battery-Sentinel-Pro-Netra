@@ -367,4 +367,41 @@ class NetraCentralDataCenterTest {
         assertEquals(1, events.count { it.eventType == NetraEventType.SPEED_CHANGED })
         assertEquals(CanonicalChargingSpeed.NORMAL, dataCenter.centralState.value.chargingSpeed)
     }
+
+    @Test
+    fun `test reverse speed thresholds`() = runTest(testDispatcher) {
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 5025000, null, null)
+        assertEquals(CanonicalChargingSpeed.ULTRA_FAST, dataCenter.centralState.value.chargingSpeed)
+
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 4500000, null, null)
+        assertEquals(CanonicalChargingSpeed.FAST, dataCenter.centralState.value.chargingSpeed)
+
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 2000000, null, null)
+        assertEquals(CanonicalChargingSpeed.NORMAL, dataCenter.centralState.value.chargingSpeed)
+
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 1000000, null, null)
+        assertEquals(CanonicalChargingSpeed.SLOW, dataCenter.centralState.value.chargingSpeed)
+    }
+
+    @Test
+    fun `test raw vs net speed separation`() = runTest(testDispatcher) {
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 3750000, null, null)
+        val state = dataCenter.centralState.value
+        assertEquals(CanonicalChargingSpeed.FAST, state.chargingSpeed)
+        assertNotNull(state.netPowerWatts)
+    }
+
+    @Test
+    fun `test repeated telemetry does not reset session timestamps`() = runTest(testDispatcher) {
+        dataCenter.processRawInput(40, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 2500000, null, null)
+        val firstStart = dataCenter.centralState.value.chargingStartedAt
+        val firstConnected = dataCenter.centralState.value.chargerConnectedAt
+
+        dataCenter.processRawInput(41, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 3000000, null, null)
+        val secondStart = dataCenter.centralState.value.chargingStartedAt
+        val secondConnected = dataCenter.centralState.value.chargerConnectedAt
+
+        assertEquals(firstStart, secondStart)
+        assertEquals(firstConnected, secondConnected)
+    }
 }
