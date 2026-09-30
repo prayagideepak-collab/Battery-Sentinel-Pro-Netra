@@ -133,14 +133,14 @@ fun WidgetCustomizationCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("NETRA SENTINEL PRO", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = activeColor)
                     }
-                    Text("Score: ${telemetry.healthScore}/100", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = NetraEmerald)
+                    Text(telemetry.healthScore?.let { "Score: $it/100" } ?: "Score: Unavailable", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = NetraEmerald)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "${telemetry.level}%",
+                        text = if (telemetry.isDataAvailable) "${telemetry.level}%" else "Unavailable",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = activeColor
@@ -148,13 +148,13 @@ fun WidgetCustomizationCard(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = if (telemetry.isCharging) "⚡ Charging (${telemetry.pluggedType})" else "🔋 Discharging",
+                            text = if (!telemetry.isDataAvailable) "Battery status unavailable" else if (telemetry.isCharging) "⚡ Charging (${telemetry.pluggedType})" else "🔋 Discharging",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (telemetry.isCharging) activeColor else NetraEmerald
                         )
                         Text(
-                            text = "${String.format("%.1f", telemetry.temperature)}°C • ${telemetry.voltageMv}mV • Degradation Sparkline Active",
+                            text = if (telemetry.isDataAvailable) "${String.format("%.1f", telemetry.temperature)}°C • ${telemetry.voltageMv}mV • Degradation Sparkline Active" else "Temperature and voltage unavailable",
                             fontSize = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
