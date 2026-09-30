@@ -481,9 +481,9 @@ private fun SystemTelemetryTabContent(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     TelemetryRow("Battery Chemistry", telemetry.technology)
                     TelemetryRow("Android OS Health Status", telemetry.healthString)
-                    TelemetryRow("Hardware Voltage", "${telemetry.voltageMv} mV")
-                    TelemetryRow("Instantaneous Current", if (telemetry.currentMa != 0) "${telemetry.currentMa} mA" else "Unavailable (OEM restricted)")
-                    TelemetryRow("Active Power Computation", "${String.format("%.2f", telemetry.powerWatts)} W")
+                    TelemetryRow("Hardware Voltage", if (telemetry.isDataAvailable) "${telemetry.voltageMv} mV" else "Unavailable")
+                    TelemetryRow("Instantaneous Current", if (telemetry.isDataAvailable && telemetry.currentMa != 0) "${telemetry.currentMa} mA" else "Unavailable (OEM restricted)")
+                    TelemetryRow("Active Power Computation", if (telemetry.isDataAvailable) "${String.format("%.2f", telemetry.powerWatts)} W" else "Unavailable")
                     TelemetryRow("Screen State", if (telemetry.isScreenOn) "Active (Screen ON)" else "Standby (Screen OFF)")
                     TelemetryRow("Background Polling Mode", if (telemetry.isScreenOn) "Active (60-90s)" else "Ultra-Low Power (300-600s)")
                     TelemetryRow("Room Database Records", "$totalRecords Stored Records")
