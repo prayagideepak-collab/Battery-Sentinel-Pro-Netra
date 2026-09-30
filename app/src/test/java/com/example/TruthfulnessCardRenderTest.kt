@@ -1,16 +1,15 @@
 package com.example
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import com.example.model.BatteryTelemetry
 import com.example.ui.components.NightChargingThrottleCard
@@ -18,6 +17,7 @@ import com.example.ui.components.BatteryHealthTrendLineChart
 import com.example.ui.components.ThermalAppCorrelationHeatmap
 import com.example.ui.theme.MyApplicationTheme
 import java.io.File
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,7 +30,7 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [34], application = android.app.Application::class, qualifiers = "w411dp-h891dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TruthfulnessCardRenderTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun renderUnavailableHealthAndThermalCards() {
@@ -50,9 +50,21 @@ class TruthfulnessCardRenderTest {
             }
         }
         compose.waitForIdle()
-        val output = File("build/outputs/ui-renders").apply { mkdirs() }
-        File(output, "truthfulness-unavailable-cards.png").outputStream().use {
-            compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+        // WindowCapture's PixelCopy/redraw wait is not supported reliably by Robolectric.
+        // Draw the laid-out activity view directly using native graphics instead.
+        lateinit var bitmap: Bitmap
+        compose.runOnIdle {
+            val view = compose.activity.window.decorView
+            assertTrue("Render view must be laid out", view.width > 0 && view.height > 0)
+            bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(bitmap))
         }
+        val output = File("build/outputs/ui-renders").apply { mkdirs() }
+        val file = File(output, "truthfulness-unavailable-cards.png")
+        file.outputStream().use {
+            assertTrue("PNG encoding must succeed", bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+        }
+        assertTrue("Render must not be empty", file.length() > 0L)
+        bitmap.recycle()
     }
 }
