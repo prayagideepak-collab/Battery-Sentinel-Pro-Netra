@@ -12,6 +12,8 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
+import com.example.model.BatteryTelemetry
+import com.example.ui.components.NightChargingThrottleCard
 import com.example.ui.components.BatteryHealthTrendLineChart
 import com.example.ui.components.ThermalAppCorrelationHeatmap
 import com.example.ui.theme.MyApplicationTheme
@@ -37,12 +39,19 @@ class TruthfulnessCardRenderTest {
                 Column(Modifier.width(380.dp).background(MaterialTheme.colorScheme.background).padding(16.dp)) {
                     BatteryHealthTrendLineChart(emptyList())
                     ThermalAppCorrelationHeatmap(emptyList(), emptyList(), Modifier.padding(top = 20.dp))
+                    NightChargingThrottleCard(
+                        telemetry = BatteryTelemetry(level = 80, isCharging = true),
+                        isFeatureEnabled = true, targetWakeHour = 7,
+                        records = emptyList(), sessions = emptyList(),
+                        onToggleFeature = {}, onSelectWakeHour = {},
+                        modifier = Modifier.padding(top = 20.dp)
+                    )
                 }
             }
         }
         compose.waitForIdle()
         val output = File("build/outputs/ui-renders").apply { mkdirs() }
-        File(output, "health-thermal-unavailable.png").outputStream().use {
+        File(output, "truthfulness-unavailable-cards.png").outputStream().use {
             compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
         }
     }
