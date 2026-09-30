@@ -77,6 +77,24 @@ fun GeminiHealthInsightsCard(
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isChatLoading by viewModel.isChatLoading.collectAsStateWithLifecycle()
 
+    GeminiHealthInsightsContent(
+        report, longevityInsight, isLongevityLoading, chatMessages, isChatLoading,
+        onRefresh = viewModel::generateFirebaseLongevityInsights,
+        onQuestion = viewModel::sendConversationalQuestion, modifier = modifier
+    )
+}
+
+@Composable
+fun GeminiHealthInsightsContent(
+    report: DegradationReport,
+    longevityInsight: ConversationalLongevityInsight?,
+    isLongevityLoading: Boolean,
+    chatMessages: List<com.example.model.LongevityChatMessage>,
+    isChatLoading: Boolean,
+    onRefresh: () -> Unit,
+    onQuestion: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
     var userQueryText by remember { mutableStateOf("") }
     var isChatExpanded by remember { mutableStateOf(false) }
 
@@ -85,16 +103,17 @@ fun GeminiHealthInsightsCard(
         FailureRiskLevel.ELEVATED -> StatusAmber
         FailureRiskLevel.MODERATE -> NetraTeal
         FailureRiskLevel.LOW -> NetraEmerald
+        null -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     SentinelCard(
-        title = "Gemini Health Insights (Firebase AI)",
+        title = "Battery History Insights",
         icon = Icons.Default.AutoAwesome,
-        dotState = if (report.riskLevel == FailureRiskLevel.CRITICAL) DotState.CRITICAL else DotState.CONNECTED,
+        dotState = if (report.riskLevel == null) DotState.STANDBY else if (report.riskLevel == FailureRiskLevel.CRITICAL) DotState.CRITICAL else DotState.CONNECTED,
         accentColor = NetraCyan,
         trailingAction = {
             IconButton(
-                onClick = { viewModel.generateFirebaseLongevityInsights() },
+                onClick = onRefresh,
                 modifier = Modifier.size(28.dp).testTag("refresh_longevity_insights_button")
             ) {
                 Icon(
@@ -117,11 +136,7 @@ fun GeminiHealthInsightsCard(
                 .padding(14.dp)
         ) {
             Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = if (report.riskLevel == FailureRiskLevel.CRITICAL || report.riskLevel == FailureRiskLevel.ELEVATED) Icons.Default.Warning else Icons.Default.HealthAndSafety,
@@ -131,7 +146,7 @@ fun GeminiHealthInsightsCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "ML Failure Risk: ${report.riskPercent}% (${report.riskLevel})",
+                            text = report.riskPercent?.let { "Failure Risk: $it% (${report.riskLevel})" } ?: "Failure risk: Unavailable",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = riskColor
@@ -139,7 +154,7 @@ fun GeminiHealthInsightsCard(
                     }
 
                     Text(
-                        text = "Est. Health: ${report.estimatedCapacityHealthPercent}%",
+                        text = report.estimatedCapacityHealthPercent?.let { "Capacity health: $it%" } ?: "Capacity health: Unavailable",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -149,7 +164,7 @@ fun GeminiHealthInsightsCard(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "• Primary Degradation Driver: ${report.primaryRiskFactor}",
+                    text = "• Pattern: ${report.primaryRiskFactor}",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -167,9 +182,9 @@ fun GeminiHealthInsightsCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    MiniFactorBox("HV DWELL (>80%)", "${report.highVoltageDwellMinutes}m", NetraCyan, Modifier.weight(1f))
-                    MiniFactorBox("HEAT (>38°C)", "${String.format("%.1f", report.thermalStressHours)}h", StatusAmber, Modifier.weight(1f))
-                    MiniFactorBox("DEEP DROPS (<15%)", "${report.deepDischargeCount}x", StatusRed, Modifier.weight(1f))
+                    MiniFactorBox("HV DWELL", report.highVoltageDwellMinutes?.let { "${it}m" } ?: "Unavailable", NetraCyan, Modifier.weight(1f))
+                    MiniFactorBox("HEAT TIME", report.thermalStressHours?.let { "${String.format("%.1f", it)}h" } ?: "Unavailable", StatusAmber, Modifier.weight(1f))
+                    MiniFactorBox("DEEP DROPS", report.deepDischargeCount?.let { "${it}x" } ?: "Unavailable", StatusRed, Modifier.weight(1f))
                 }
             }
         }
@@ -188,7 +203,7 @@ fun GeminiHealthInsightsCard(
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), color = NetraCyan, strokeWidth = 2.dp)
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Analyzing Room SQLite trends via Firebase AI...",
+                    text = "Summarizing available battery records...",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -221,7 +236,7 @@ fun GeminiHealthInsightsCard(
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "Habit Score: ${insight.habitScore}/100",
+                                text = "Habit score: Unavailable",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = NetraEmerald
@@ -320,8 +335,8 @@ fun GeminiHealthInsightsCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    SuggestionChip("Overnight charge safe?", onClick = { viewModel.sendConversationalQuestion("Is overnight charging safe for my battery?") }, modifier = Modifier.weight(1f))
-                    SuggestionChip("Why did it heat up?", onClick = { viewModel.sendConversationalQuestion("Why did my battery heat up recently?") }, modifier = Modifier.weight(1f))
+                    SuggestionChip("Overnight charge safe?", onClick = { onQuestion("Is overnight charging safe for my battery?") }, modifier = Modifier.weight(1f))
+                    SuggestionChip("Why did it heat up?", onClick = { onQuestion("Why did my battery heat up recently?") }, modifier = Modifier.weight(1f))
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -348,7 +363,7 @@ fun GeminiHealthInsightsCard(
                         ) {
                             Column {
                                 Text(
-                                    text = if (msg.isUser) "You" else "Gemini Health AI",
+                                    text = if (msg.isUser) "You" else "Battery History",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (msg.isUser) NetraCyan else NetraEmerald
@@ -367,7 +382,7 @@ fun GeminiHealthInsightsCard(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(modifier = Modifier.size(14.dp), color = NetraEmerald, strokeWidth = 2.dp)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Gemini is analyzing battery trends...", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Reading available battery records...", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -394,7 +409,7 @@ fun GeminiHealthInsightsCard(
                     IconButton(
                         onClick = {
                             if (userQueryText.isNotBlank()) {
-                                viewModel.sendConversationalQuestion(userQueryText)
+                                onQuestion(userQueryText)
                                 userQueryText = ""
                             }
                         },
