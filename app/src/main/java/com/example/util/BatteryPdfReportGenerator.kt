@@ -59,6 +59,7 @@ object BatteryPdfReportGenerator {
             file
         } catch (e: Exception) {
             Log.e(TAG, "Failed to generate daily PDF report", e)
+            e.printStackTrace()
             null
         }
     }
