@@ -30,7 +30,16 @@ data class NetraCentralState(
     val bluetoothConnected: Boolean? = null,
     val bluetoothBatteryPercent: Int? = null,
     val lastUpdateTimestamp: Long = 0L,
-    val isDataFresh: Boolean = false
+    val isDataFresh: Boolean = false,
+    // Session Timestamps
+    val chargerConnectedAt: Long? = null,
+    val chargingStartedAt: Long? = null,
+    val chargingStoppedAt: Long? = null,
+    val chargerDisconnectedAt: Long? = null,
+    val dischargingStartedAt: Long? = null,
+    // ETAs (null if unavailable)
+    val chargingEtaMinutes: Int? = null,
+    val dischargingEtaMinutes: Int? = null
 )
 
 /** The legacy non-null telemetry model may only receive a complete hardware sample. */

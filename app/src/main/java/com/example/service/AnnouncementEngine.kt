@@ -159,8 +159,8 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
         }
 
         // 3. Charging Speed Transition (<5W: Slow, 5-10W: Normal, 10-20W: Fast, >20W: Ultra Fast)
-        if (telemetry.isCharging && telemetry.powerWatts > 0f) {
-            val currentCategory = categorizePowerSpeed(telemetry.powerWatts)
+        if (telemetry.isCharging && (telemetry.powerWatts ?: 0f) > 0f) {
+            val currentCategory = categorizePowerSpeed(telemetry.powerWatts ?: 0f)
             if (lastSpeedCategory != null && lastSpeedCategory != currentCategory) {
                 lastSpeedCategory = currentCategory
                 if (settings.announceChargingSpeed) {
@@ -394,8 +394,8 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
         lastPhoneLevel = telemetry.level
         lastPhoneBoundary = calculate5PercentBoundary(telemetry.level)
         lastChargingState = telemetry.isCharging
-        lastSpeedCategory = if (telemetry.isCharging && telemetry.powerWatts > 0f) {
-            categorizePowerSpeed(telemetry.powerWatts)
+        lastSpeedCategory = if (telemetry.isCharging && (telemetry.powerWatts ?: 0f) > 0f) {
+            categorizePowerSpeed(telemetry.powerWatts ?: 0f)
         } else null
         lastThermalWarningState = telemetry.temperature >= 40.0f
         lastCriticalOverheatState = telemetry.temperature >= 45.0f

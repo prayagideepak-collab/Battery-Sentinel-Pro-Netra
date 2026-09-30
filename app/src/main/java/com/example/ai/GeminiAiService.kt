@@ -252,9 +252,9 @@ object GeminiAiService {
 
         val advice = if (t.isCharging) {
             if (t.level >= 80) "Battery is at ${t.level}%. Disconnecting now prevents high voltage dwell stress (4.35V+)."
-            else "Charging actively at ${String.format("%.2f", t.powerWatts)}W. Target 80% SoC for optimal lifespan."
+            else "Charging actively at ${String.format("%.2f", t.powerWatts ?: 0f)}W. Target 80% SoC for optimal lifespan."
         } else {
-            "Discharging at ~${String.format("%.2f", kotlin.math.abs(t.powerWatts))}W. Recharge before dipping below 20%."
+            "Discharging at ~${String.format("%.2f", kotlin.math.abs(t.powerWatts ?: 0f))}W. Recharge before dipping below 20%."
         }
 
         val actions = mutableListOf(

@@ -18,6 +18,9 @@ class NetraApplication : Application() {
     lateinit var settingsRepository: SettingsRepository
         private set
 
+    lateinit var centralDataCenter: NetraCentralDataCenter
+        private set
+
     lateinit var calibrationManager: com.example.ai.BatteryCalibrationManager
         private set
 
@@ -30,17 +33,14 @@ class NetraApplication : Application() {
     lateinit var telemetrySentinel: com.example.service.TelemetrySentinel
         private set
 
-    lateinit var centralDataCenter: NetraCentralDataCenter
-        private set
-
     override fun onCreate() {
         super.onCreate()
         instance = this
         database = NetraDatabase.getDatabase(this)
         settingsRepository = SettingsRepository(this)
+        centralDataCenter = NetraCentralDataCenter()
         announcementEngine = com.example.service.AnnouncementEngine(this)
         telemetrySentinel = com.example.service.TelemetrySentinel(this)
-        centralDataCenter = NetraCentralDataCenter()
         calibrationManager = com.example.ai.BatteryCalibrationManager(this)
         powerProfileManager = com.example.ai.PowerProfileManager(this)
         batteryRepository = BatteryRepository(database.batteryDao(), database.chargingSessionDao(), database.activityLogDao())

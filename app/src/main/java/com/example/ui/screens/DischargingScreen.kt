@@ -169,7 +169,7 @@ fun DischargingScreen(
                     )
                     DrainBox(
                         label = "REAL POWER DRAIN",
-                        value = "${String.format("%.2f", kotlin.math.abs(telemetry.powerWatts))} W",
+                        value = telemetry.powerWatts?.let { "${String.format("%.2f", kotlin.math.abs(it))} W" } ?: "Unavailable",
                         accent = NetraCyan,
                         modifier = Modifier.weight(1f)
                     )
