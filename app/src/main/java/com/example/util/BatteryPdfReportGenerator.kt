@@ -59,20 +59,11 @@ object BatteryPdfReportGenerator {
             file
         } catch (e: Exception) {
             Log.e(TAG, "Failed to generate daily PDF report", e)
-            // If PDF rendering fails on JVM/Robolectric, generate fallback report file
-            try {
-                val reportDir = File(context.filesDir, "reports").apply { mkdirs() }
-                val dateSlug = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                val fallbackFile = File(reportDir, "Netra_Battery_Report_$dateSlug.pdf")
-                fallbackFile.writeText("%PDF-1.4\nNetra Battery Sentinel Daily Report Fallback\n")
-                fallbackFile
-            } catch (_: Exception) {
-                null
-            }
+            null
         }
     }
 
-    private fun drawReportContent(
+    internal fun drawReportContent(
         canvas: Canvas,
         records: List<BatteryRecord>,
         sessions: List<ChargingSession>,
@@ -121,9 +112,9 @@ object BatteryPdfReportGenerator {
             y = currentY,
             w = colWidth,
             h = 65f,
-            title = "ESTIMATED HEALTH",
-            value = "${degradationReport.estimatedCapacityHealthPercent}%",
-            sub = "Grade: ${telemetry.healthGrade}",
+            title = "CAPACITY HEALTH",
+            value = degradationReport.estimatedCapacityHealthPercent?.let { "$it%" } ?: "Unavailable",
+            sub = "Not measured by this app",
             accentColor = Color.rgb(0, 230, 118)
         )
 
@@ -134,10 +125,10 @@ object BatteryPdfReportGenerator {
             y = currentY,
             w = colWidth,
             h = 65f,
-            title = "FAILURE RISK INDEX",
-            value = "${degradationReport.riskPercent}%",
-            sub = "Level: ${degradationReport.riskLevel}",
-            accentColor = if (degradationReport.riskPercent >= 50) Color.rgb(255, 82, 82) else Color.rgb(255, 179, 0)
+            title = "FAILURE RISK",
+            value = degradationReport.riskPercent?.let { "$it%" } ?: "Unavailable",
+            sub = degradationReport.riskLevel?.let { "Level: $it" } ?: "Unavailable",
+            accentColor = if ((degradationReport.riskPercent ?: 0) >= 50) Color.rgb(255, 82, 82) else Color.rgb(255, 179, 0)
         )
 
         // Card 3: Cycle Equivalent
@@ -147,9 +138,9 @@ object BatteryPdfReportGenerator {
             y = currentY,
             w = colWidth,
             h = 65f,
-            title = "FULL CYCLES",
+            title = "OBSERVED CHARGE",
             value = "${String.format("%.1f", degradationReport.totalEquivalentCycles)}x",
-            sub = "Room Samples: ${records.size}",
+            sub = "Partial recorded history",
             accentColor = Color.rgb(0, 229, 255)
         )
 
@@ -162,20 +153,20 @@ object BatteryPdfReportGenerator {
         paint.color = Color.rgb(0, 229, 255)
         paint.textSize = 12f
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        canvas.drawText("⚡ 24-HOUR ENERGY EFFICIENCY & CHARGING CYCLES", margin + 16f, currentY + 24f, paint)
+        canvas.drawText("RECORDED CHARGING SESSIONS", margin + 16f, currentY + 24f, paint)
 
-        val avgWatt = if (sessions.isNotEmpty()) sessions.map { it.avgPowerWatts }.average().toFloat() else 8.5f
-        val peakT = if (sessions.isNotEmpty()) sessions.maxOf { it.peakTemperature } else telemetry.temperature
+        val avgWatt = sessions.map { it.avgPowerWatts }.filter { it.isFinite() && it > 0f }.takeIf { it.isNotEmpty() }?.average()?.toFloat()
+        val peakT = sessions.map { it.peakTemperature }.filter { it.isFinite() && it > 0f }.maxOrNull()
         val totalSessions = sessions.size
 
         paint.color = Color.WHITE
         paint.textSize = 10f
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        canvas.drawText("• Recorded Charging Sessions: $totalSessions completed cycles", margin + 16f, currentY + 45f, paint)
-        canvas.drawText("• Average Charging Power Input: ${String.format("%.2f", avgWatt)} Watts", margin + 16f, currentY + 62f, paint)
-        canvas.drawText("• Peak Recorded Cell Temperature: ${String.format("%.1f", peakT)} °C (${if (peakT >= 40f) "EXCEEDED 40°C LIMIT" else "SAFE THERMAL MARGIN"})", margin + 16f, currentY + 79f, paint)
-        canvas.drawText("• Coulombic Charging Efficiency: ~92.4% (Minimal Joule Heat Loss)", margin + 16f, currentY + 96f, paint)
-        canvas.drawText("• Primary Stress Driver: ${degradationReport.primaryRiskFactor}", margin + 16f, currentY + 113f, paint)
+        canvas.drawText("• Recorded Charging Sessions: $totalSessions observed sessions", margin + 16f, currentY + 45f, paint)
+        canvas.drawText("• Mean recorded battery-side power: ${avgWatt?.let { "${String.format("%.2f", it)} Watts" } ?: "Unavailable"}", margin + 16f, currentY + 62f, paint)
+        canvas.drawText("• Peak Recorded Cell Temperature: ${peakT?.let { "${String.format("%.1f", it)}°C" } ?: "Unavailable"}", margin + 16f, currentY + 79f, paint)
+        canvas.drawText("• Coulombic Charging Efficiency: Unavailable (not measured)", margin + 16f, currentY + 96f, paint)
+        canvas.drawText("• Primary Stress Driver: Unavailable (capacity history not measured)", margin + 16f, currentY + 113f, paint)
 
         currentY += 140f
 
@@ -186,15 +177,15 @@ object BatteryPdfReportGenerator {
         paint.color = Color.rgb(255, 179, 0) // Amber
         paint.textSize = 12f
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        canvas.drawText("🌡️ THERMAL & HIGH-VOLTAGE DWELL STRESS AUDIT", margin + 16f, currentY + 24f, paint)
+        canvas.drawText("DURATION / EPISODE MEASURES UNAVAILABLE", margin + 16f, currentY + 24f, paint)
 
         paint.color = Color.WHITE
         paint.textSize = 10f
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        canvas.drawText("• Elevated Heat Time (>38°C): ${String.format("%.1f", degradationReport.thermalStressHours)} hours logged", margin + 16f, currentY + 45f, paint)
-        canvas.drawText("• High Voltage Dwell (>80% SoC): ${degradationReport.highVoltageDwellMinutes} minutes (>4.25V stress)", margin + 16f, currentY + 62f, paint)
-        canvas.drawText("• Deep Discharge Occurrences (<15% SoC): ${degradationReport.deepDischargeCount} events", margin + 16f, currentY + 79f, paint)
-        canvas.drawText("• Instantaneous Operating Voltage: ${telemetry.voltageMv} mV • Current: ${telemetry.currentMa} mA", margin + 16f, currentY + 96f, paint)
+        canvas.drawText("• Elevated Heat Time (>38°C): Unavailable", margin + 16f, currentY + 45f, paint)
+        canvas.drawText("• High Voltage Dwell (>80% SoC): Unavailable", margin + 16f, currentY + 62f, paint)
+        canvas.drawText("• Deep Discharge Occurrences (<15% SoC): Unavailable", margin + 16f, currentY + 79f, paint)
+        canvas.drawText("• Voltage: ${if (telemetry.isDataAvailable && telemetry.voltageMv > 0) "${telemetry.voltageMv} mV" else "Unavailable"} • Current: ${if (telemetry.isDataAvailable && telemetry.currentMa != 0) "${telemetry.currentMa} mA" else "Unavailable"}", margin + 16f, currentY + 96f, paint)
 
         currentY += 130f
 
@@ -205,14 +196,14 @@ object BatteryPdfReportGenerator {
         paint.color = Color.rgb(0, 230, 118) // Emerald
         paint.textSize = 12f
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        canvas.drawText("🕒 TIME-SERIES OPTIMAL CHARGING WINDOW", margin + 16f, currentY + 24f, paint)
+        canvas.drawText("CHARGING PATTERN", margin + 16f, currentY + 24f, paint)
 
         paint.color = Color.WHITE
         paint.textSize = 10f
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        canvas.drawText("• Recommended Charging Slot: 07:30 AM – 08:45 AM (Coolest device thermal window)", margin + 16f, currentY + 45f, paint)
-        canvas.drawText("• Recommended Cutoff: Disconnect at 80% SoC to avoid cathode phase transition", margin + 16f, currentY + 62f, paint)
-        canvas.drawText("• Habit Suggestion: Avoid 6+ hour overnight trickle charging to extend lifecycle by 2.2x", margin + 16f, currentY + 79f, paint)
+        canvas.drawText("• Recommended Charging Slot: Unavailable (daily pattern not established)", margin + 16f, currentY + 45f, paint)
+        canvas.drawText("• This app cannot measure lifespan gains or enforce charger cutoffs.", margin + 16f, currentY + 62f, paint)
+        canvas.drawText("• Habit Suggestion: Avoid charging in high-heat conditions", margin + 16f, currentY + 79f, paint)
 
         currentY += 110f
 
@@ -223,20 +214,20 @@ object BatteryPdfReportGenerator {
         paint.color = Color.rgb(0, 229, 255)
         paint.textSize = 12f
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        canvas.drawText("💡 PERSONALIZED ACTION PLAN", margin + 16f, currentY + 24f, paint)
+        canvas.drawText("GENERAL GUIDANCE (NOT A DIAGNOSIS)", margin + 16f, currentY + 24f, paint)
 
         paint.color = Color.WHITE
         paint.textSize = 10f
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        canvas.drawText("1. ${degradationReport.keyMitigation}", margin + 16f, currentY + 45f, paint)
-        canvas.drawText("2. Keep Netra 80% Target Unplug Alarm enabled at all times.", margin + 16f, currentY + 62f, paint)
-        canvas.drawText("3. Keep cell temperatures below 38°C during high-wattage fast charging sessions.", margin + 16f, currentY + 79f, paint)
+        canvas.drawText("1. Avoid excessive heat; use device-supported charging controls.", margin + 16f, currentY + 45f, paint)
+        canvas.drawText("2. This report is not a capacity test or a battery-failure diagnosis.", margin + 16f, currentY + 62f, paint)
+        canvas.drawText("3. For unusual swelling, heat or shutdowns, contact device support.", margin + 16f, currentY + 79f, paint)
 
         // Footer
         paint.color = Color.rgb(100, 116, 139)
         paint.textSize = 8.5f
         paint.textAlign = Paint.Align.CENTER
-        canvas.drawText("Generated autonomously by Netra Sentinel Pro • Ultra-Low Power 24/7 Engine", width / 2f, height - margin, paint)
+        canvas.drawText("Netra Sentinel Pro • Recorded observations, not a hardware diagnosis", width / 2f, height - margin, paint)
     }
 
     private fun drawKpiCard(
