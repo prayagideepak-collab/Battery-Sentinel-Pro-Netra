@@ -231,27 +231,10 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
         settingsRepository.setThermalWarningThreshold(threshold)
     }
 
-    // Calibration Control Methods
-    fun startCalibration() {
-        NetraApplication.instance.calibrationManager.startCalibration(liveTelemetry.value.level)
-        viewModelScope.launch {
-            repository.logEvent(
-                title = "Calibration Wizard Started",
-                message = "Initiated full discharge & charge cycle for electrochemical capacity recalibration.",
-                category = "SYSTEM",
-                severity = "INFO",
-                dotColor = "BLUE"
-            )
-        }
-    }
-
-    fun cancelCalibration() {
-        NetraApplication.instance.calibrationManager.cancelCalibration()
-    }
-
-    fun advanceCalibrationStep() {
-        NetraApplication.instance.calibrationManager.manuallyAdvanceStep()
-    }
+    // Compatibility entry points: no Android fuel-gauge calibration API is available.
+    fun startCalibration() = Unit
+    fun cancelCalibration() = Unit
+    fun advanceCalibrationStep() = Unit
 
     // Power Profile Selection
     fun setPowerProfile(mode: com.example.model.PowerProfileMode) {

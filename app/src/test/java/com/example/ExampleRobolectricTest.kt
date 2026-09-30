@@ -10,6 +10,7 @@ import com.example.data.local.ChargingSession
 import com.example.model.BatteryTelemetry
 import com.example.model.DotState
 import com.example.util.BatteryPdfReportGenerator
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -104,23 +105,17 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `test battery calibration wizard step progression`() {
+    fun `unsupported calibration never claims completion or loads fabricated preferences`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val calibManager = com.example.ai.BatteryCalibrationManager(context)
-
-        calibManager.startCalibration(75)
-        assertEquals(com.example.model.CalibrationStep.STEP_1_DISCHARGE, calibManager.calibrationState.value.currentStep)
-        assertTrue(calibManager.calibrationState.value.isWizardActive)
-
-        // Simulate reaching 10% discharge
-        calibManager.onTelemetryUpdate(BatteryTelemetry(level = 9, isCharging = false))
-        assertEquals(com.example.model.CalibrationStep.STEP_2_REST, calibManager.calibrationState.value.currentStep)
-
-        calibManager.manuallyAdvanceStep()
-        assertEquals(com.example.model.CalibrationStep.STEP_3_FULL_CHARGE, calibManager.calibrationState.value.currentStep)
-
-        calibManager.cancelCalibration()
-        assertEquals(com.example.model.CalibrationStep.NOT_STARTED, calibManager.calibrationState.value.currentStep)
+        context.getSharedPreferences("netra_calibration_prefs", Context.MODE_PRIVATE).edit()
+            .putInt("calibrated_capacity", 4850).putInt("accuracy_score", 99).apply()
+        val manager = com.example.ai.BatteryCalibrationManager(context)
+        manager.startCalibration(75)
+        manager.onTelemetryUpdate(BatteryTelemetry(level = 9, isCharging = false))
+        manager.manuallyAdvanceStep()
+        assertEquals(com.example.model.CalibrationStep.NOT_STARTED, manager.calibrationState.value.currentStep)
+        assertFalse(manager.calibrationState.value.isWizardActive)
+        assertEquals(0L, manager.calibrationState.value.lastCalibratedTimestamp)
     }
 
     @Test

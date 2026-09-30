@@ -11,7 +11,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
+import com.example.model.CalibrationSessionState
 import com.example.model.BatteryTelemetry
+import com.example.ui.components.BatteryCalibrationWizardCard
 import com.example.ui.components.OptimalChargingWindowCard
 import com.example.ui.components.NightChargingThrottleCard
 import com.example.ui.components.BatteryHealthTrendLineChart
@@ -34,6 +36,18 @@ class TruthfulnessCardRenderTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test
+    fun renderUnavailableCalibrationCard() {
+        compose.setContent {
+            MyApplicationTheme {
+                Column(Modifier.width(380.dp).background(MaterialTheme.colorScheme.background).padding(16.dp)) {
+                    BatteryCalibrationWizardCard(CalibrationSessionState(), BatteryTelemetry(), {}, {}, {})
+                }
+            }
+        }
+        captureCard("calibration-unavailable.png")
+    }
+
+    @Test
     fun renderUnavailableHealthAndThermalCards() {
         compose.setContent {
             MyApplicationTheme {
@@ -51,6 +65,10 @@ class TruthfulnessCardRenderTest {
                 }
             }
         }
+        captureCard("truthfulness-unavailable-cards.png")
+    }
+
+    private fun captureCard(filename: String) {
         compose.waitForIdle()
         // WindowCapture's PixelCopy/redraw wait is not supported reliably by Robolectric.
         // Draw the laid-out activity view directly using native graphics instead.
@@ -62,7 +80,7 @@ class TruthfulnessCardRenderTest {
             view.draw(Canvas(bitmap))
         }
         val output = File("build/outputs/ui-renders").apply { mkdirs() }
-        val file = File(output, "truthfulness-unavailable-cards.png")
+        val file = File(output, filename)
         file.outputStream().use {
             assertTrue("PNG encoding must succeed", bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
