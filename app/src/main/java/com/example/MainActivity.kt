@@ -97,6 +97,23 @@ fun MainAppContent(viewModel: NetraViewModel) {
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
     val canonical by viewModel.canonicalState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Thermal & Low Battery Brightness Protection Lock
+    LaunchedEffect(canonical.targetBrightnessPercent) {
+        val activity = context as? ComponentActivity
+        val window = activity?.window
+        val target = canonical.targetBrightnessPercent
+        if (window != null) {
+            val lp = window.attributes
+            if (target != null) {
+                lp.screenBrightness = (target / 100f).coerceIn(0.01f, 1.0f)
+            } else {
+                lp.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            }
+            window.attributes = lp
+        }
+    }
 
     // Request permissions on startup gracefully
     val permissionLauncher = rememberLauncherForActivityResult(

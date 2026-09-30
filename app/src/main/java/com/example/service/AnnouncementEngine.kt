@@ -395,6 +395,28 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
                     )
                 }
             }
+            NetraEventType.THERMAL_PROTECTION_STARTED -> {
+                enqueue(
+                    AnnouncementItem(
+                        id = "thermal_prot_start_$now",
+                        text = "Thermal control started.",
+                        priority = AnnouncementPriority.CRITICAL_THERMAL,
+                        category = "THERMAL_PROTECTION",
+                        isNightException = true
+                    )
+                )
+            }
+            NetraEventType.LOW_BATTERY_PROTECTION_STARTED -> {
+                enqueue(
+                    AnnouncementItem(
+                        id = "low_bat_prot_start_$now",
+                        text = "Battery power saving started.",
+                        priority = AnnouncementPriority.CHARGER_STATE,
+                        category = "LOW_BATTERY_PROTECTION",
+                        isNightException = true
+                    )
+                )
+            }
             else -> {}
         }
     }

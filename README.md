@@ -280,11 +280,24 @@ Product classification table:
 
 Power is derived strictly from Android battery voltage and current when available. Notifications, announcements, and UI elements all consume this centralized raw power classification.
 
-## Thermal Target
+## Thermal Critical Control & Protection
 
-The core thermal target is **below 40°C**, with a preferred recovery target around **39.5°C** when the application is responding to a high-temperature condition.
+- **Critical Thermal Entry:** Triggered when battery temperature exceeds **40.0°C**.
+- **Thermal Recovery:** Resets when battery temperature drops to **≤ 35.0°C**.
+- **Actions:** Minimizes Nethra CPU/background workload, adjusts window brightness toward ~10%, launches ambient sensor diagnostics (`Sensor.TYPE_AMBIENT_TEMPERATURE` where hardware permits), logs canonical events, and broadcasts "Thermal control started."
 
-The exact protective response must remain limited to actions that Android permits.
+## Low Battery Control & Power Saving
+
+- **Low Battery Entry:** Triggered when battery drops to **≤ 30%** while discharging.
+- **Low Battery Recovery:** Resets when battery charges or reaches **≥ 35%**.
+- **Actions:** Minimizes background work, adjusts brightness toward ~10%, logs canonical events, and announces "Battery power saving started."
+- **Coexistence:** Thermal and Low Battery controls can be active simultaneously; shared actions execute once and recover independently.
+
+## Night Protection Policy
+
+- **Default Active Hours:** 11:00 PM (23:00) to 6:00 AM (06:00).
+- **Behavior:** Suppresses routine battery and speed announcements while allowing critical thermal and safety alerts.
+- **Backlog Suppression:** Suppressed announcements are dropped immediately and never replayed at 6:00 AM.
 
 ## Battery History
 

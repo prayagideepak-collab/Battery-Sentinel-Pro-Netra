@@ -142,10 +142,11 @@ data class NetraCentralState(
     val mediaPausedByNethra: Boolean = false,
     // Night Protection Policy State
     val isNightProtectionActive: Boolean = false,
-    // Thermal & Battery Protection States (Part 16)
+    // Thermal & Battery Protection States (Part 16 & 17)
     val isCriticalThermalActive: Boolean = false,
     val isLowBatteryControlActive: Boolean = false,
     val targetBrightnessPercent: Int? = null,
+    val thermalCauseDiagnosis: String? = null,
     // Real-Time Pipeline Latency Instrumentation (Target: <= 100ms)
     val pipelineLatency: PipelineLatencyMetrics? = null
 )

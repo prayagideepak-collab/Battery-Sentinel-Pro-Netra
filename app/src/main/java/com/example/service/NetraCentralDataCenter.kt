@@ -43,10 +43,12 @@ class NetraCentralDataCenter {
     private var inMemoryBluetoothHistory: MutableList<com.example.model.BluetoothDeviceItem>? = null
 
     private var capabilityRegistry: CentralCapabilityRegistry? = null
+    private var thermalInvestigator: ThermalCauseInvestigator? = null
     private var lastValidStatePrefs: android.content.SharedPreferences? = null
 
     fun initCapabilityRegistry(context: Context) {
         capabilityRegistry = CentralCapabilityRegistry(context)
+        thermalInvestigator = ThermalCauseInvestigator(context)
         refreshCapabilities()
     }
 
@@ -454,19 +456,71 @@ class NetraCentralDataCenter {
                 if (mergedTempCelsius > 40.0f && !isCriticalThermalActiveState) {
                     isCriticalThermalActiveState = true
                     targetBrightnessPercentState = 10
+                    thermalInvestigator?.startInvestigation()
+                    eventsToEmit.add(
+                        NetraCentralEvent(
+                            eventId = "event_thermal_prot_start_$now",
+                            eventType = NetraEventType.THERMAL_PROTECTION_STARTED,
+                            timestamp = now,
+                            previousValue = "NORMAL",
+                            newValue = mergedTempCelsius.toString(),
+                            source = source
+                        )
+                    )
                 } else if (mergedTempCelsius <= 35.0f && isCriticalThermalActiveState) {
                     isCriticalThermalActiveState = false
-                    targetBrightnessPercentState = null
+                    thermalInvestigator?.stopInvestigation()
+                    if (!isLowBatteryControlActiveState) {
+                        targetBrightnessPercentState = null
+                    }
+                    eventsToEmit.add(
+                        NetraCentralEvent(
+                            eventId = "event_thermal_prot_rec_$now",
+                            eventType = NetraEventType.THERMAL_PROTECTION_RECOVERED,
+                            timestamp = now,
+                            previousValue = "CRITICAL",
+                            newValue = mergedTempCelsius.toString(),
+                            source = source
+                        )
+                    )
                 }
             }
 
             if (mergedLevel != null) {
-                if (mergedLevel <= 15 && mergedIsCharging != true && !isLowBatteryControlActiveState) {
+                if (mergedLevel <= 30 && mergedIsCharging != true && !isLowBatteryControlActiveState) {
                     isLowBatteryControlActiveState = true
-                } else if (mergedLevel > 20 || mergedIsCharging == true) {
+                    targetBrightnessPercentState = 10
+                    eventsToEmit.add(
+                        NetraCentralEvent(
+                            eventId = "event_low_bat_prot_start_$now",
+                            eventType = NetraEventType.LOW_BATTERY_PROTECTION_STARTED,
+                            timestamp = now,
+                            previousValue = "NORMAL",
+                            newValue = mergedLevel.toString(),
+                            source = source
+                        )
+                    )
+                } else if ((mergedLevel >= 35 || mergedIsCharging == true) && isLowBatteryControlActiveState) {
                     isLowBatteryControlActiveState = false
+                    if (!isCriticalThermalActiveState) {
+                        targetBrightnessPercentState = null
+                    }
+                    eventsToEmit.add(
+                        NetraCentralEvent(
+                            eventId = "event_low_bat_prot_rec_$now",
+                            eventType = NetraEventType.LOW_BATTERY_PROTECTION_RECOVERED,
+                            timestamp = now,
+                            previousValue = "LOW_BATTERY",
+                            newValue = mergedLevel.toString(),
+                            source = source
+                        )
+                    )
                 }
             }
+
+            val thermalDiagnosis = if (isCriticalThermalActiveState && mergedTempCelsius != null) {
+                thermalInvestigator?.diagnoseThermalCause(mergedTempCelsius) ?: "Thermal stress active (>40°C)."
+            } else null
 
             val t2Nanos = System.nanoTime()
             val valDurationMs = (t1Nanos - t0Nanos) / 1_000_000f
@@ -520,6 +574,7 @@ class NetraCentralDataCenter {
                 isCriticalThermalActive = isCriticalThermalActiveState,
                 isLowBatteryControlActive = isLowBatteryControlActiveState,
                 targetBrightnessPercent = targetBrightnessPercentState,
+                thermalCauseDiagnosis = thermalDiagnosis,
                 pipelineLatency = latencyMetrics
             )
 

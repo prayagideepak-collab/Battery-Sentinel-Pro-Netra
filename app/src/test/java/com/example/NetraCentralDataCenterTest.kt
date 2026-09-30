@@ -474,4 +474,69 @@ class NetraCentralDataCenterTest {
         assertEquals(com.example.model.CanonicalChargerState.CHARGER_CONNECTED_NOT_CHARGING, state.canonicalChargerState)
         assertEquals(CanonicalChargingSpeed.UNAVAILABLE, state.chargingSpeed)
     }
+
+    @Test
+    fun `test thermal critical control entry at 40C and recovery at 35C`() = runTest(testDispatcher) {
+        // Temp 41°C enters protection
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 410, 4000, -500000, null, null)
+        val state1 = dataCenter.centralState.value
+        assertTrue(state1.isCriticalThermalActive)
+        assertEquals(10, state1.targetBrightnessPercent)
+
+        // Temp 38°C remains in protection (must NOT recover at 38°C)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 380, 4000, -500000, null, null)
+        val state2 = dataCenter.centralState.value
+        assertTrue(state2.isCriticalThermalActive)
+        assertEquals(10, state2.targetBrightnessPercent)
+
+        // Temp 35°C recovers
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 350, 4000, -500000, null, null)
+        val state3 = dataCenter.centralState.value
+        org.junit.Assert.assertFalse(state3.isCriticalThermalActive)
+        assertNull(state3.targetBrightnessPercent)
+    }
+
+    @Test
+    fun `test low battery control entry at 30 percent and recovery at 35 percent`() = runTest(testDispatcher) {
+        // Battery 28% enters low battery control
+        dataCenter.processRawInput(28, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 3800, -500000, null, null)
+        val state1 = dataCenter.centralState.value
+        assertTrue(state1.isLowBatteryControlActive)
+        assertEquals(10, state1.targetBrightnessPercent)
+
+        // Battery 32% remains in low battery control
+        dataCenter.processRawInput(32, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 3800, -500000, null, null)
+        val state2 = dataCenter.centralState.value
+        assertTrue(state2.isLowBatteryControlActive)
+
+        // Battery 35% recovers
+        dataCenter.processRawInput(35, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 300, 3800, -500000, null, null)
+        val state3 = dataCenter.centralState.value
+        org.junit.Assert.assertFalse(state3.isLowBatteryControlActive)
+        assertNull(state3.targetBrightnessPercent)
+    }
+
+    @Test
+    fun `test thermal and low battery coexistence and independent recovery`() = runTest(testDispatcher) {
+        // Battery 28%, Temp 42°C: Both active
+        dataCenter.processRawInput(28, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 420, 3800, -500000, null, null)
+        val state1 = dataCenter.centralState.value
+        assertTrue(state1.isCriticalThermalActive)
+        assertTrue(state1.isLowBatteryControlActive)
+        assertEquals(10, state1.targetBrightnessPercent)
+
+        // Thermal recovers (34°C) but battery still 28%: low battery remains active, brightness stays 10%
+        dataCenter.processRawInput(28, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 340, 3800, -500000, null, null)
+        val state2 = dataCenter.centralState.value
+        org.junit.Assert.assertFalse(state2.isCriticalThermalActive)
+        assertTrue(state2.isLowBatteryControlActive)
+        assertEquals(10, state2.targetBrightnessPercent)
+
+        // Battery charged to 40%: both now recovered, brightness resets to normal
+        dataCenter.processRawInput(40, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 340, 4000, 2500000, null, null)
+        val state3 = dataCenter.centralState.value
+        org.junit.Assert.assertFalse(state3.isCriticalThermalActive)
+        org.junit.Assert.assertFalse(state3.isLowBatteryControlActive)
+        assertNull(state3.targetBrightnessPercent)
+    }
 }
