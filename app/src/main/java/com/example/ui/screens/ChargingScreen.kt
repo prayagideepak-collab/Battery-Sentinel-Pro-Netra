@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.ChargingSession
 import com.example.model.DotState
+import com.example.model.hasCompleteLegacyReading
 import com.example.ui.components.SentinelCard
 import com.example.ui.components.StatusDot
 import com.example.ui.theme.DangerRed
@@ -59,8 +60,17 @@ fun ChargingScreen(
     modifier: Modifier = Modifier
 ) {
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
+    val canonicalReading by viewModel.canonicalState.collectAsStateWithLifecycle()
     val sessions by viewModel.recentChargingSessions.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+
+    if (!telemetry.isDataAvailable || !canonicalReading.hasCompleteLegacyReading()) {
+        Column(modifier = modifier.fillMaxSize().padding(24.dp)) {
+            Text("Battery telemetry unavailable", color = MaterialTheme.colorScheme.onSurface)
+            Text("Waiting for a complete device reading. No estimate is shown.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
 
     LazyColumn(
         modifier = modifier
@@ -186,7 +196,7 @@ fun ChargingScreen(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = if (telemetry.isCharging) {
-                                telemetry.timeToFullMinutes?.let { "~$it minutes" } ?: "Estimating..."
+                                telemetry.timeToFullMinutes?.let { "~$it minutes" } ?: "Unavailable"
                             } else "N/A",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -200,7 +210,7 @@ fun ChargingScreen(
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Text(
-                            text = "Target 80%: ${if (telemetry.level >= 80) "REACHED" else "ARMED"}",
+                            text = "Target ${settings.chargeTargetPercent}%: ${if (telemetry.level >= settings.chargeTargetPercent) "REACHED" else "ARMED"}",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = NetraEmerald
