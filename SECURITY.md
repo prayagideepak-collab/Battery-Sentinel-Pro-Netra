@@ -2,6 +2,12 @@
 
 ## Supported Versions
 
+Security updates are currently provided for the latest development and release version of Battery Sentinel Pro Nethra.
+
+| Version | Supported |
+|---|---|
+| Latest release | Yes |
+| Older releases | No |
 Battery Sentinel Pro Nethra is currently under active development and UI/architecture rebuild.
 
 | Version | Supported |
@@ -12,6 +18,23 @@ Battery Sentinel Pro Nethra is currently under active development and UI/archite
 
 ## Reporting a Vulnerability
 
+If you discover a security vulnerability in Battery Sentinel Pro Nethra, please report it privately rather than opening a public GitHub issue.
+
+### Preferred Method
+
+Use GitHub's **Private Vulnerability Reporting** feature for this repository if it is available.
+
+Please include:
+
+- A clear description of the vulnerability
+- The affected version or commit
+- Steps to reproduce the issue
+- Expected behavior
+- Actual behavior
+- Security impact
+- Relevant logs, screenshots, or proof of concept when safe to provide
+
+Do not include passwords, API keys, authentication tokens, personal information, or other sensitive data in the report.
 If you discover a security vulnerability in Battery Sentinel Pro Nethra, please report it privately.
 
 Please do **not** create a public GitHub issue for an undisclosed security vulnerability.
@@ -40,6 +63,27 @@ Do not include passwords, API keys, authentication tokens, personal information,
 
 Security reports will be reviewed and investigated.
 
+Depending on the severity and validity of the issue, the maintainers may:
+
+1. Reproduce and verify the vulnerability.
+2. Determine the affected components and versions.
+3. Develop and test a fix.
+4. Release a security update when appropriate.
+5. Publish security information after the issue has been addressed.
+
+## Responsible Disclosure
+
+Please avoid publicly disclosing a vulnerability before the maintainers have had a reasonable opportunity to investigate and address it.
+
+Public GitHub issues should not be used for undisclosed security vulnerabilities.
+
+## Scope
+
+Security reports may include issues involving:
+
+- Android application security
+- Permission handling
+- Authentication or authorization
 When a report is received, the maintainer may:
 
 1. Verify and reproduce the reported issue.
@@ -69,37 +113,13 @@ Security reports may include vulnerabilities involving:
 - Update and release mechanisms
 - Network communication
 - Dependency vulnerabilities
-- Privilege escalation
-- Code execution
-- Authentication or authorization
-- Other security vulnerabilities directly affecting Battery Sentinel Pro Nethra
+- Code execution or privilege escalation
+- Other security issues directly affecting Battery Sentinel Pro Nethra
 
 ## Out of Scope
 
-The following should normally be reported through regular GitHub Issues instead:
+General bugs, UI problems, feature requests, performance issues, and unsupported Android behavior should be reported through normal GitHub issues unless they create a security vulnerability.
 
-- UI bugs
-- Feature requests
-- General usability problems
-- Performance problems without a security impact
-- Incorrect battery readings without a security impact
-- General Android compatibility issues
+## Security Principle
 
-If a normal bug also creates a security vulnerability, report it privately as a security issue.
-
-## Security Principles
-
-Battery Sentinel Pro Nethra follows these principles:
-
-- Use Android public APIs wherever possible.
-- Request only permissions required by implemented functionality.
-- Do not fabricate permission states or security status.
-- Do not expose sensitive information unnecessarily.
-- Do not claim security capabilities that the application does not actually implement.
-- Keep security-sensitive functionality subject to testing and verification.
-
-## Development Status
-
-Battery Sentinel Pro Nethra is currently undergoing a zero-based UI and architecture rebuild.
-
-Development and pre-release versions should not be assumed to provide the same stability or security guarantees as a future production release.
+Battery Sentinel Pro Nethra follows a real-data and least-privilege approach. The application should request only the Android permissions and system access required for its implemented functionality and should not claim capabilities that are not actually provided by Android.
