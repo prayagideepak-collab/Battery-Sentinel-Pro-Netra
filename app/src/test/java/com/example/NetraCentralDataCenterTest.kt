@@ -384,11 +384,11 @@ class NetraCentralDataCenterTest {
     }
 
     @Test
-    fun `test raw vs net speed separation`() = runTest(testDispatcher) {
+    fun `test charging speed uses raw battery input power exclusively`() = runTest(testDispatcher) {
         dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 3750000, null, null)
         val state = dataCenter.centralState.value
         assertEquals(CanonicalChargingSpeed.FAST, state.chargingSpeed)
-        assertNotNull(state.netPowerWatts)
+        assertEquals(15.0f, state.powerWatts!!, 0.01f)
     }
 
     @Test

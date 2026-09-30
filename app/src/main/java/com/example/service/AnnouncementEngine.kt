@@ -210,8 +210,8 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
                     val speechText = when (currentSpeed) {
                         CanonicalChargingSpeed.SLOW -> "Slow charging."
                         CanonicalChargingSpeed.NORMAL -> "Normal charging."
-                        CanonicalChargingSpeed.FAST -> "F charging."
-                        CanonicalChargingSpeed.ULTRA_FAST -> "UF charging."
+                        CanonicalChargingSpeed.FAST -> "Fast charging."
+                        CanonicalChargingSpeed.ULTRA_FAST -> "Ultra fast charging."
                         else -> "Normal charging."
                     }
                     enqueue(

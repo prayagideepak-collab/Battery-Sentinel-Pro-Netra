@@ -489,7 +489,7 @@ private fun SystemTelemetryTabContent(
                     TelemetryRow("Hardware Voltage", canonical.voltageMv?.let { "$it mV" } ?: "Unavailable")
                     TelemetryRow("Instantaneous Current", canonical.currentMa?.let { "$it mA" } ?: "Unavailable")
                     TelemetryRow("Active Power Computation", canonical.powerWatts?.let { "${String.format(java.util.Locale.US, "%.2f", it)} W" } ?: "Unavailable")
-                    TelemetryRow("Charging Speed Tier", canonical.chargingSpeed.name.replace('_', ' '))
+                    TelemetryRow("Charging Speed Tier", canonical.chargingSpeed.fullLabelWithTier)
                     canonical.pipelineLatency?.let { latency ->
                         TelemetryRow("Central Pipeline Latency", "${String.format(java.util.Locale.US, "%.2f", latency.totalProcessingMs)} ms (Budget: ≤100ms)")
                         TelemetryRow("Latency Budget Status", if (latency.meetsBudget) "Compliant (≤100ms)" else "Exceeded")

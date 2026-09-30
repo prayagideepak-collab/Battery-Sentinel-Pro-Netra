@@ -13,7 +13,34 @@ enum class CanonicalChargingSpeed {
     NORMAL,     // 5W to < 10W
     FAST,       // 10W to 20W
     ULTRA_FAST, // > 20W
-    UNAVAILABLE
+    UNAVAILABLE;
+
+    val displayLabel: String
+        get() = when (this) {
+            SLOW -> "Slow Charging"
+            NORMAL -> "Normal Charging"
+            FAST -> "Fast Charging"
+            ULTRA_FAST -> "Ultra Fast Charging"
+            UNAVAILABLE -> "Unavailable"
+        }
+
+    val tierRange: String
+        get() = when (this) {
+            SLOW -> "< 5W"
+            NORMAL -> "5W–10W"
+            FAST -> "10W–20W"
+            ULTRA_FAST -> "> 20W"
+            UNAVAILABLE -> "N/A"
+        }
+
+    val fullLabelWithTier: String
+        get() = when (this) {
+            SLOW -> "Slow (<5W)"
+            NORMAL -> "Normal (5W–10W)"
+            FAST -> "Fast (10W–20W)"
+            ULTRA_FAST -> "Ultra Fast (>20W)"
+            UNAVAILABLE -> "Unavailable"
+        }
 }
 
 enum class CanonicalPluggedType {

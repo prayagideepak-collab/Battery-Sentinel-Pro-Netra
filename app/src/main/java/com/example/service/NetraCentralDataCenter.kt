@@ -186,21 +186,16 @@ class NetraCentralDataCenter {
             val mergedVoltageMv = voltageMv ?: oldState.voltageMv
             val mergedCurrentMa = currentMa ?: oldState.currentMa
 
-            // Central ChargingSpeedEngine calculation
+            // Central ChargingSpeedEngine calculation using raw incoming power exclusively
             val speedResult = chargingSpeedEngine.calculate(mergedIsCharging, mergedVoltageMv, mergedCurrentMa)
             val mergedRawPower = speedResult.rawPowerWatts ?: oldState.powerWatts
-            val mergedNetPower = speedResult.netPowerWatts ?: oldState.netPowerWatts
             val mergedConsumption = speedResult.consumptionPowerWatts ?: oldState.consumptionPowerWatts
             val mergedSpeed = if (mergedIsCharging == true) {
                 if (speedResult.speedCategory != CanonicalChargingSpeed.UNAVAILABLE) speedResult.speedCategory else oldState.chargingSpeed
             } else {
                 CanonicalChargingSpeed.UNAVAILABLE
             }
-            val mergedAnnouncementSpeed = if (mergedIsCharging == true) {
-                if (speedResult.announcementCategory != CanonicalChargingSpeed.UNAVAILABLE) speedResult.announcementCategory else oldState.announcementSpeed
-            } else {
-                CanonicalChargingSpeed.UNAVAILABLE
-            }
+            val mergedAnnouncementSpeed = mergedSpeed
 
             // Calculate precise FieldStatus for each telemetry parameter
             val fieldStates = TelemetryFieldState(
@@ -504,7 +499,7 @@ class NetraCentralDataCenter {
                 voltageMv = mergedVoltageMv,
                 currentMa = mergedCurrentMa,
                 powerWatts = mergedRawPower,
-                netPowerWatts = mergedNetPower,
+                netPowerWatts = null,
                 consumptionPowerWatts = mergedConsumption,
                 chargingSpeed = mergedSpeed,
                 announcementSpeed = mergedAnnouncementSpeed,

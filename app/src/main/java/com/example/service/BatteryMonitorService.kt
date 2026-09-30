@@ -221,10 +221,10 @@ class BatteryMonitorService : Service() {
         val currentMa = canonical.currentMa ?: _liveTelemetryFlow.value.currentMa
         val powerWatts = canonical.powerWatts ?: _liveTelemetryFlow.value.powerWatts
         val (chargingSpeed, speedLabel) = when (canonical.chargingSpeed) {
-            CanonicalChargingSpeed.SLOW -> ChargerSpeed.SLOW to "Slow charging"
-            CanonicalChargingSpeed.NORMAL -> ChargerSpeed.STANDARD to "Normal charging"
-            CanonicalChargingSpeed.FAST -> ChargerSpeed.FAST to "Fast charging"
-            CanonicalChargingSpeed.ULTRA_FAST -> ChargerSpeed.SUPER to "Ultra-fast charging"
+            CanonicalChargingSpeed.SLOW -> ChargerSpeed.SLOW to "Slow Charging"
+            CanonicalChargingSpeed.NORMAL -> ChargerSpeed.STANDARD to "Normal Charging"
+            CanonicalChargingSpeed.FAST -> ChargerSpeed.FAST to "Fast Charging"
+            CanonicalChargingSpeed.ULTRA_FAST -> ChargerSpeed.SUPER to "Ultra Fast Charging"
             CanonicalChargingSpeed.UNAVAILABLE -> ChargerSpeed.UNKNOWN to "Unavailable"
         }
 
@@ -536,10 +536,10 @@ class BatteryMonitorService : Service() {
         val tempStr = t.temperatureCelsius?.let { String.format(java.util.Locale.US, "%.1f°C", it) }
 
         val speedText = when (t.chargingSpeed) {
-            CanonicalChargingSpeed.SLOW -> "Slow"
-            CanonicalChargingSpeed.NORMAL -> "Normal"
-            CanonicalChargingSpeed.FAST -> "Fast"
-            CanonicalChargingSpeed.ULTRA_FAST -> "Ultra Fast"
+            CanonicalChargingSpeed.SLOW -> "Slow Charging"
+            CanonicalChargingSpeed.NORMAL -> "Normal Charging"
+            CanonicalChargingSpeed.FAST -> "Fast Charging"
+            CanonicalChargingSpeed.ULTRA_FAST -> "Ultra Fast Charging"
             CanonicalChargingSpeed.UNAVAILABLE -> ""
         }
 
@@ -595,7 +595,7 @@ class BatteryMonitorService : Service() {
                 tempStr?.let { lines.add(it) }
             } else {
                 title = "Battery • $levelStr"
-                val drainPower = t.consumptionPowerWatts ?: t.netPowerWatts?.let { if (it < 0) abs(it) else null } ?: t.powerWatts?.let { if (it < 0) abs(it) else null }
+                val drainPower = t.consumptionPowerWatts ?: t.powerWatts?.let { if (it < 0) abs(it) else null }
                 drainPower?.let {
                     lines.add(String.format(java.util.Locale.US, "Drain %.1fW", it))
                 }

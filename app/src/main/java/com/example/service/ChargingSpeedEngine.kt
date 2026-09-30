@@ -5,7 +5,6 @@ import kotlin.math.abs
 
 data class SpeedEngineResult(
     val rawPowerWatts: Float?,
-    val netPowerWatts: Float?,
     val consumptionPowerWatts: Float?,
     val speedCategory: CanonicalChargingSpeed,
     val announcementCategory: CanonicalChargingSpeed
@@ -22,6 +21,7 @@ class ChargingSpeedEngine {
             (voltageMv.toFloat() * currentMa.toFloat()) / 1_000_000f
         } else null
 
+        // Raw incoming charging power: strictly positive power delivered to battery while charging
         val rawPowerWatts = if (isCharging == true) {
             batteryPowerWatts?.coerceAtLeast(0f)
         } else if (batteryPowerWatts != null && batteryPowerWatts < 0) {
@@ -30,16 +30,15 @@ class ChargingSpeedEngine {
             null
         }
 
-        val netPowerWatts = batteryPowerWatts
-
+        // Monitored strictly for independent phone discharge telemetry; never modifies charging speed
         val consumptionWatts = if (currentMa != null && currentMa < 0 && voltageMv != null) {
             abs(voltageMv.toFloat() * currentMa.toFloat()) / 1_000_000f
         } else {
             null
         }
 
-        // Exact thresholds: <5W = Slow, >=5W and <10W = Normal, >=10W and <=20W = Fast, >20W = Ultra Fast
-        // RAW INCOMING POWER ONLY. Consumption / net power does NOT affect charging speed classification.
+        // Hardcoded speed tiers: <5W = Slow, >=5W and <10W = Normal, >=10W and <=20W = Fast, >20W = Ultra Fast
+        // Rely exclusively on raw battery input power. No 'effective' or 'net' charging power calculations.
         val speedCategory = if (isCharging == true && rawPowerWatts != null) {
             when {
                 rawPowerWatts > 20.0f -> CanonicalChargingSpeed.ULTRA_FAST
@@ -51,14 +50,11 @@ class ChargingSpeedEngine {
             CanonicalChargingSpeed.UNAVAILABLE
         }
 
-        val announcementCategory = speedCategory
-
         return SpeedEngineResult(
             rawPowerWatts = rawPowerWatts,
-            netPowerWatts = netPowerWatts,
             consumptionPowerWatts = consumptionWatts,
             speedCategory = speedCategory,
-            announcementCategory = announcementCategory
+            announcementCategory = speedCategory
         )
     }
 }

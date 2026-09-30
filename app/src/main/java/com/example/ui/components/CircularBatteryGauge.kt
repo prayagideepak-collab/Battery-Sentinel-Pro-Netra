@@ -162,7 +162,7 @@ fun CircularBatteryGauge(
                 val statusLabel = when (canonical.isCharging) {
                     true -> {
                         val powerStr = canonical.powerWatts?.let { String.format(java.util.Locale.US, "%.1fW", it) }
-                        val speedStr = canonical.chargingSpeed.name.replace('_', ' ')
+                        val speedStr = canonical.chargingSpeed.displayLabel
                         if (powerStr != null) "$powerStr • $speedStr" else speedStr
                     }
                     false -> if (canonical.isChargerConnected == true) "Plugged in • Idle" else "On Battery (Discharging)"
