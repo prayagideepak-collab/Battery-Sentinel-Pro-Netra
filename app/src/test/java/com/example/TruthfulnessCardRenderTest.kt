@@ -11,6 +11,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
+import com.example.ai.BatteryDegradationPredictor
+import com.example.ui.components.GeminiHealthInsightsContent
 import com.example.model.CalibrationSessionState
 import com.example.model.BatteryTelemetry
 import com.example.ui.components.BatteryCalibrationWizardCard
@@ -34,6 +36,45 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TruthfulnessCardRenderTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test
+    fun renderUnavailableDegradationCard() {
+        compose.setContent {
+            MyApplicationTheme {
+                Column(Modifier.width(380.dp).background(MaterialTheme.colorScheme.background).padding(16.dp)) {
+                    GeminiHealthInsightsContent(
+                        BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(emptyList(), emptyList()),
+                        null, false, emptyList(), false, {}, {}
+                    )
+                }
+            }
+        }
+        captureCard("degradation-unavailable.png")
+    }
+
+    @Test
+    fun renderBatteryReportContent() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val report = BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(emptyList(), emptyList())
+        val pdf = com.example.util.BatteryPdfReportGenerator.generateDailyReport(
+            context, emptyList(), emptyList(), report, BatteryTelemetry()
+        )
+        assertTrue("Report must be a real PDF, not a fallback", pdf != null && pdf.length() > 100L)
+        val pdfOutput = File("build/outputs/ui-renders/report-unavailable.pdf")
+        pdfOutput.parentFile?.mkdirs()
+        pdf!!.copyTo(pdfOutput, overwrite = true)
+        val bitmap = Bitmap.createBitmap(595, 842, Bitmap.Config.ARGB_8888)
+        com.example.util.BatteryPdfReportGenerator.drawReportContent(
+            Canvas(bitmap), emptyList(), emptyList(),
+            BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(emptyList(), emptyList()),
+            BatteryTelemetry()
+        )
+        val file = File("build/outputs/ui-renders/report-unavailable.png")
+        file.parentFile?.mkdirs()
+        file.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        assertTrue(file.length() > 0L)
+        bitmap.recycle()
+    }
 
     @Test
     fun renderUnavailableCalibrationCard() {
