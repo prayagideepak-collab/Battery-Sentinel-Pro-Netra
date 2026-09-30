@@ -40,7 +40,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.model.BatteryTelemetry
+import com.example.model.NetraCentralState
 import com.example.ui.theme.NetraCyan
 import com.example.ui.theme.NetraEmerald
 import com.example.ui.theme.StatusAmber
@@ -48,23 +48,23 @@ import com.example.ui.theme.StatusRed
 
 @Composable
 fun CircularBatteryGauge(
-    telemetry: BatteryTelemetry,
+    canonical: NetraCentralState,
     modifier: Modifier = Modifier
 ) {
     val animatedProgress by animateFloatAsState(
-        targetValue = (telemetry.level / 100f).coerceIn(0f, 1f),
+        targetValue = ((canonical.batteryLevel ?: 0) / 100f).coerceIn(0f, 1f),
         animationSpec = tween(durationMillis = 800),
         label = "gauge_progress"
     )
 
     val gaugeColor = when {
-        telemetry.temperature >= 40f -> StatusRed
-        telemetry.temperature >= 38f -> StatusAmber
-        telemetry.level <= 15 -> StatusAmber
+        (canonical.temperatureCelsius ?: -1f) >= 40f -> StatusRed
+        (canonical.temperatureCelsius ?: -1f) >= 38f -> StatusAmber
+        canonical.batteryLevel != null && canonical.batteryLevel <= 15 -> StatusAmber
         else -> NetraEmerald
     }
 
-    val gradientColors = if (telemetry.isCharging) {
+    val gradientColors = if (canonical.isCharging == true) {
         listOf(NetraCyan, NetraEmerald, Color(0xFF76FF03))
     } else {
         listOf(gaugeColor, gaugeColor.copy(alpha = 0.7f))
@@ -114,7 +114,7 @@ fun CircularBatteryGauge(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                if (telemetry.isCharging) {
+                if (canonical.isCharging == true) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -130,7 +130,7 @@ fun CircularBatteryGauge(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = telemetry.pluggedType,
+                            text = canonical.pluggedType?.name ?: "Unavailable",
                             color = NetraCyan,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -143,7 +143,7 @@ fun CircularBatteryGauge(
                     verticalAlignment = Alignment.Bottom
                 ) {
                     Text(
-                        text = "${telemetry.level}",
+                        text = canonical.batteryLevel?.toString() ?: "?",
                         fontSize = 48.sp,
                         fontWeight = FontWeight.ExtraBold,
                         fontFamily = FontFamily.SansSerif,
@@ -151,7 +151,7 @@ fun CircularBatteryGauge(
                         letterSpacing = (-1).sp
                     )
                     Text(
-                        text = "%",
+                        text = if (canonical.batteryLevel != null) "%" else "",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = gaugeColor,
@@ -160,10 +160,14 @@ fun CircularBatteryGauge(
                 }
 
                 Text(
-                    text = if (telemetry.isCharging) telemetry.chargingSpeedLabel else "Discharging",
+                    text = when (canonical.isCharging) {
+                        true -> canonical.chargingSpeed.name.replace('_', ' ')
+                        false -> "Not charging"
+                        null -> "Status unavailable"
+                    },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (telemetry.isCharging) NetraEmerald else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (canonical.isCharging == true) NetraEmerald else MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -172,10 +176,10 @@ fun CircularBatteryGauge(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (telemetry.temperature >= 40f) StatusRed.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant)
+                        .background(if ((canonical.temperatureCelsius ?: -1f) >= 40f) StatusRed.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant)
                         .border(
                             1.dp,
-                            if (telemetry.temperature >= 40f) StatusRed else Color.Transparent,
+                            if ((canonical.temperatureCelsius ?: -1f) >= 40f) StatusRed else Color.Transparent,
                             RoundedCornerShape(8.dp)
                         )
                         .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -184,15 +188,15 @@ fun CircularBatteryGauge(
                         Icon(
                             imageVector = Icons.Default.DeviceThermostat,
                             contentDescription = "Temperature",
-                            tint = if (telemetry.temperature >= 40f) StatusRed else NetraCyan,
+                            tint = if ((canonical.temperatureCelsius ?: -1f) >= 40f) StatusRed else NetraCyan,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "${String.format("%.1f", telemetry.temperature)} °C",
+                            text = canonical.temperatureCelsius?.let { "${String.format("%.1f", it)} °C" } ?: "Unavailable",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (telemetry.temperature >= 40f) StatusRed else MaterialTheme.colorScheme.onSurface
+                            color = if ((canonical.temperatureCelsius ?: -1f) >= 40f) StatusRed else MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -214,20 +218,20 @@ fun CircularBatteryGauge(
         ) {
             TelemetryMetric(
                 label = "VOLTAGE",
-                value = "${telemetry.voltageMv} mV",
+                value = canonical.voltageMv?.let { "$it mV" } ?: "Unavailable",
                 accent = NetraCyan
             )
             Box(modifier = Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
             TelemetryMetric(
                 label = "CURRENT",
-                value = if (telemetry.currentMa != 0) "${telemetry.currentMa} mA" else "Unavailable",
-                accent = if (telemetry.currentMa >= 0) NetraEmerald else StatusAmber
+                value = canonical.currentMa?.let { "$it mA" } ?: "Unavailable",
+                accent = if ((canonical.currentMa ?: 0) >= 0) NetraEmerald else StatusAmber
             )
             Box(modifier = Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
             TelemetryMetric(
                 label = "POWER",
-                value = "${String.format("%.2f", telemetry.powerWatts)} W",
-                accent = if (telemetry.isCharging) NetraEmerald else MaterialTheme.colorScheme.onSurface
+                value = canonical.powerWatts?.let { "${String.format("%.2f", it)} W" } ?: "Unavailable",
+                accent = if (canonical.isCharging == true) NetraEmerald else MaterialTheme.colorScheme.onSurface
             )
         }
     }
