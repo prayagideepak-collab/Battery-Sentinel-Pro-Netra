@@ -104,7 +104,7 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `test daily PDF report generator creation`() {
+    fun `unverified PDF export produces no fake file`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val records = listOf(
             BatteryRecord(level = 80, temperature = 28.0f, voltageMv = 4100, currentMa = 1500, powerWatts = 6.0f, isCharging = true, pluggedType = "AC", healthStatus = "GOOD")
@@ -115,10 +115,11 @@ class ExampleRobolectricTest {
         val report = BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(records, sessions)
         val telemetry = BatteryTelemetry(level = 80, isCharging = true)
 
+        val reportDir = java.io.File(context.filesDir, "reports")
+        val before = reportDir.listFiles()?.map { it.name }?.toSet() ?: emptySet()
         val pdfFile = BatteryPdfReportGenerator.generateDailyReport(context, records, sessions, report, telemetry)
-        assertNotNull(pdfFile)
-        assertTrue(pdfFile!!.exists())
-        assertTrue(pdfFile.length() > 0)
+        assertNull(pdfFile)
+        assertEquals(before, reportDir.listFiles()?.map { it.name }?.toSet() ?: emptySet())
     }
 
     @Test
