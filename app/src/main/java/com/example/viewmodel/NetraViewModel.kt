@@ -97,6 +97,9 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
     // Dynamic Power-Saving Profile State
     val powerProfileState = NetraApplication.instance.powerProfileManager.profileState
 
+    // Central State
+    val canonicalState = NetraApplication.instance.centralDataCenter.centralState
+
     // Charging & Discharging Lists
     val recentChargingSessions: StateFlow<List<ChargingSession>> = repository.recentChargingSessions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

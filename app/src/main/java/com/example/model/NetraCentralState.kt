@@ -31,12 +31,6 @@ data class NetraCentralState(
     val bluetoothBatteryPercent: Int? = null,
     val lastUpdateTimestamp: Long = 0L,
     val isDataFresh: Boolean = false,
-    // Session Timestamps
-    val chargerConnectedAt: Long? = null,
-    val chargingStartedAt: Long? = null,
-    val chargingStoppedAt: Long? = null,
-    val chargerDisconnectedAt: Long? = null,
-    val dischargingStartedAt: Long? = null,
     // ETAs (null if unavailable)
     val chargingEtaMinutes: Int? = null,
     val dischargingEtaMinutes: Int? = null
