@@ -98,6 +98,7 @@ fun MainAppContent(viewModel: NetraViewModel) {
     var currentTab by remember { mutableStateOf(NetraTab.HOME) }
     var showBatteryGraph by remember { mutableStateOf(false) }
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
+    val canonical by viewModel.canonicalState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     // Request permissions on startup gracefully
@@ -201,16 +202,16 @@ fun MainAppContent(viewModel: NetraViewModel) {
                             StatusDot(state = telemetry.serviceDotState, size = 6.dp)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "${telemetry.level}%",
+                                text = canonical.batteryLevel?.let { "$it%" } ?: "Unavailable",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (telemetry.isCharging) NetraCyan else NetraEmerald
+                                color = if (canonical.isCharging == true) NetraCyan else NetraEmerald
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "• ${String.format("%.1f", telemetry.temperature)}°C",
+                                text = canonical.temperatureCelsius?.let { "• ${String.format("%.1f", it)}°C" } ?: "• Temp unavailable",
                                 fontSize = 11.sp,
-                                color = if (telemetry.temperature >= 40f) StatusRed else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if ((canonical.temperatureCelsius ?: 0f) >= 40f) StatusRed else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
