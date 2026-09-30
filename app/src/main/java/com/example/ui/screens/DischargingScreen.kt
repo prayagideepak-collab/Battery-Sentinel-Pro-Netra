@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.BatteryRecord
 import com.example.model.DotState
+import com.example.model.hasCompleteLegacyReading
 import com.example.ui.components.SentinelCard
 import com.example.ui.theme.NetraCyan
 import com.example.ui.theme.NetraEmerald
@@ -57,6 +58,7 @@ fun DischargingScreen(
     modifier: Modifier = Modifier
 ) {
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
+    val canonicalReading by viewModel.canonicalState.collectAsStateWithLifecycle()
     val checkpoints by viewModel.recentDischargeCheckpoints.collectAsStateWithLifecycle()
 
     // Compute observed discharge rate (%/hr) from checkpoints if available
@@ -64,11 +66,17 @@ fun DischargingScreen(
         val oldest = checkpoints.last()
         val newest = checkpoints.first()
         val timeDiffHours = (newest.timestamp - oldest.timestamp) / 3600_000f
-        val dropLevel = (oldest.level - newest.level).coerceAtLeast(0)
-        if (timeDiffHours > 0.05f) {
-            String.format("%.2f", dropLevel / timeDiffHours).toFloatOrNull() ?: 3.20f
-        } else 3.20f
-    } else 3.20f
+        val dropLevel = oldest.level - newest.level
+        if (timeDiffHours > 0.05f && dropLevel > 0) dropLevel / timeDiffHours else null
+    } else null
+
+    if (!telemetry.isDataAvailable || !canonicalReading.hasCompleteLegacyReading()) {
+        Column(modifier = modifier.fillMaxSize().padding(24.dp)) {
+            Text("Battery telemetry unavailable", color = MaterialTheme.colorScheme.onSurface)
+            Text("Waiting for a complete device reading. No estimate is shown.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
 
     LazyColumn(
         modifier = modifier
@@ -113,13 +121,13 @@ fun DischargingScreen(
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
                             text = if (!telemetry.isCharging) {
-                                "~${String.format("%.1f", telemetry.estimatedDischargeHours)}"
+                                telemetry.estimatedDischargeHours?.let { "~${String.format("%.1f", it)}" } ?: "Unavailable"
                             } else "Charging",
                             fontSize = 38.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = if (telemetry.level <= 15) StatusAmber else NetraEmerald
                         )
-                        if (!telemetry.isCharging) {
+                        if (!telemetry.isCharging && telemetry.estimatedDischargeHours != null) {
                             Text(
                                 text = "hours",
                                 fontSize = 16.sp,
@@ -133,7 +141,7 @@ fun DischargingScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Calculated based on actual device hardware load & Room telemetry samples.",
+                        text = "Remaining runtime unavailable without measured capacity and a reliable drain model.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -188,7 +196,7 @@ fun DischargingScreen(
                             Text(text = "Historical gradient across battery samples", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Text(
-                            text = "${observedRate} % / hour",
+                            text = observedRate?.let { "${String.format("%.2f", it)} % / hour" } ?: "Unavailable",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = NetraEmerald
