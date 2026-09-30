@@ -174,7 +174,7 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
     private val _chatMessages = MutableStateFlow<List<LongevityChatMessage>>(
         listOf(
             LongevityChatMessage(
-                text = "Hello! I am Gemini Health Insights in Netra Sentinel. Ask me anything about your charging habits, battery degradation risk, or how to maximize battery longevity.",
+                text = "Battery records can show observations, but cannot measure capacity health or predict battery failure.",
                 isUser = false
             )
         )
@@ -462,8 +462,8 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
             _isLongevityLoading.value = false
 
             repository.logEvent(
-                title = "Gemini Longevity Insights Generated",
-                message = "Habit Score: ${insight.habitScore}/100 • ${insight.title} via ${insight.aiModelUsed}",
+                title = "Battery History Summary Generated",
+                message = "Habit score unavailable • ${insight.title} via ${insight.aiModelUsed}",
                 category = "SYSTEM",
                 severity = "INFO",
                 dotColor = "GREEN"
