@@ -469,3 +469,52 @@ If a feature is removed, replaced, redesigned, or found to be unsupported by And
 If an implementation is incomplete, the README must say so rather than presenting the feature as finished.
 
 This rule applies to all future development on the `main` branch.
+
+## Central Unit Architecture & Mandatory Routing Rule
+
+The application must use **one Central Unit / Central Data Authority as the mandatory control point for all functionality**.
+
+### Mandatory architecture rule
+
+Every new, changed, patched, upgraded, or otherwise processed functionality must pass through the Central Unit first.
+
+```
+New / Existing / Updated Process
+            ↓
+       Central Unit
+            ↓
+ Inspect → Validate → Normalize → Compare
+            ↓
+ Duplicate? → Reject / remove duplicate
+ New? → Register / integrate
+ Improvement / Patch / New Version?
+        → identify and integrate
+            ↓
+       Approve / Route
+            ↓
+     Actual Application Layer
+```
+
+No feature, process, state transition, calculation, service action, repository operation, notification data path, announcement path, permission flow, monitoring path, or other application functionality may independently establish a competing implementation outside the Central Unit.
+
+The Central Unit is responsible for:
+
+- detecting whether functionality already exists;
+- identifying duplicate or conflicting implementations;
+- identifying a genuinely new implementation;
+- identifying improvements, patches, fixes, or newer versions of an existing implementation;
+- integrating compatible improvements into the existing implementation;
+- rejecting/removing true duplicates rather than allowing parallel implementations;
+- maintaining one authoritative path for each responsibility;
+- controlling how approved functionality is routed to the rest of the application.
+
+### Existing-code integration rule
+
+Before adding code, inspect the existing implementation.
+
+If compatible code already exists, extend/integrate it through the Central Unit instead of creating a second implementation.
+
+Only create a new component when the required capability genuinely does not exist or existing code cannot technically support it.
+
+This rule applies to all future development on the `main` branch and to every Part of the sequential implementation plan.
+
