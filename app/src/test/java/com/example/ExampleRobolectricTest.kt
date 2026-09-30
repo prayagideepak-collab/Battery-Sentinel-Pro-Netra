@@ -12,6 +12,7 @@ import com.example.model.DotState
 import com.example.util.BatteryPdfReportGenerator
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -63,9 +64,25 @@ class ExampleRobolectricTest {
 
         val report = BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(records, sessions)
         assertNotNull(report)
-        assertTrue(report.riskPercent > 0)
-        assertTrue(report.estimatedCapacityHealthPercent in 50..100)
+        assertNull(report.riskPercent)
+        assertNull(report.riskLevel)
+        assertNull(report.estimatedCapacityHealthPercent)
+        assertNull(report.highVoltageDwellMinutes)
+        assertNull(report.thermalStressHours)
+        assertNull(report.deepDischargeCount)
+        assertEquals(0.8f, report.totalEquivalentCycles, 0.001f)
+        assertFalse(report.requiresAlert)
         assertNotNull(report.primaryRiskFactor)
+    }
+
+    @Test
+    fun `empty battery history has no invented capacity cycles or risk`() {
+        val report = BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(emptyList(), emptyList())
+        assertNull(report.riskPercent)
+        assertNull(report.riskLevel)
+        assertNull(report.estimatedCapacityHealthPercent)
+        assertEquals(0f, report.totalEquivalentCycles, 0.001f)
+        assertFalse(report.requiresAlert)
     }
 
     @Test
