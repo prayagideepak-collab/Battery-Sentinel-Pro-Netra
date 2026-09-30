@@ -13,7 +13,7 @@ The application is built around these primary pillars:
    - Voltage
    - Current
    - Charging power
-   - Charging speed
+   - Charging speed (Slow / Normal / Fast / Super Fast / Ultra Fast)
 
 2. **Battery Saving**
    - Reduce unnecessary application polling
@@ -22,7 +22,8 @@ The application is built around these primary pillars:
 
 3. **Thermal Sentinel**
    - Continuously observe battery/device temperature when Android exposes it
-   - Target operation below 40°C
+   - Ideal idle target: 30°C; when idle temperature rises above 30°C, supported optimization begins automatically
+   - Critical thermal protection remains separate and safety-authoritative; environmental context must not disable it
    - Provide thermal warnings and protective responses using capabilities actually available through Android
 
 4. **Charging Intelligence**
@@ -262,9 +263,11 @@ The UI must launch the real Android flow and then refresh the result when the us
 
 ## Charging Speed (Raw Incoming Power Model)
 
-The charging speed classification uses **raw incoming charging power only**. 
+The charging speed classification uses **raw incoming charging power only**.
 
-- CG / net / effective charging-speed calculation and consumption subtraction have been removed entirely. Phone consumption does not affect charging speed classification.
+- CG / net / effective charging-speed calculation and consumption subtraction are not used for speed classification. Phone consumption does not affect charging speed classification.
+- Charging telemetry is being hardened to investigate OEM current-sign/unit behavior and corroborate power with charge-counter/battery progression where available.
+- A real-device high-power charging session must be runtime-verified before charging-speed detection is marked Verified.
 - Charging state and charger connection state are strictly independent (`CHARGER_CONNECTED_CHARGING`, `CHARGER_CONNECTED_NOT_CHARGING`, `CHARGER_DISCONNECTED`, `DISCHARGING`).
 - Low-power USB data connections without confirmed active battery charging are not misclassified as slow charging.
 
@@ -272,24 +275,27 @@ Product classification table:
 
 | Charging power (Raw Incoming) | Classification | Status |
 |---:|---|---|
-| < 5 W | Slow | Verified |
-| 5 W to < 10 W | Normal | Verified |
-| 10 W to 20 W | Fast | Verified |
-| > 20 W | Ultra Fast | Verified |
+| < 5 W | Slow | In Development |
+| 5 W to < 10 W | Normal | In Development |
+| 10 W to < 20 W | Fast | In Development |
+| 20 W to < 40 W | Super Fast | In Development |
+| ≥ 40 W | Ultra Fast | In Development |
 | Not Charging / Connected | Unavailable / Not Applicable | Verified |
 
 Power is derived strictly from Android battery voltage and current when available. Notifications, announcements, and UI elements all consume this centralized raw power classification.
 
-## Thermal Critical Control & Protection
+## Ideal Idle Thermal Control & Critical Protection
 
+- **Ideal Idle Target:** **30.0°C**. When the device is idle and temperature exceeds 30.0°C, supported optimization begins automatically. Recovery for this idle optimization occurs at **≤ 30.0°C**.
 - **Critical Thermal Entry:** Triggered when battery temperature exceeds **40.0°C**.
-- **Thermal Recovery:** Resets when battery temperature drops to **≤ 35.0°C**.
+- Critical thermal protection remains separate from the 30°C idle target and is not weakened by environmental/weather context.
+- Ambient-temperature investigation is used only when supported; unavailable environmental data must not be converted into a confident internal/external heat attribution.
 - **Actions:** Minimizes Nethra CPU/background workload, adjusts window brightness toward ~10%, launches ambient sensor diagnostics (`Sensor.TYPE_AMBIENT_TEMPERATURE` where hardware permits), logs canonical events, and broadcasts "Thermal control started."
 
 ## Low Battery Control & Power Saving
 
 - **Low Battery Entry:** Triggered when battery drops to **≤ 30%** while discharging.
-- **Low Battery Recovery:** Resets when battery charges or reaches **≥ 35%**.
+- **Low Battery Recovery:** Resets only when battery reaches **≥ 35%**. Charging status alone does not clear low-battery protection below 35%.
 - **Actions:** Minimizes background work, adjusts brightness toward ~10%, logs canonical events, and announces "Battery power saving started."
 - **Coexistence:** Thermal and Low Battery controls can be active simultaneously; shared actions execute once and recover independently.
 
@@ -409,6 +415,25 @@ Before considering a feature complete, verify all three layers:
 
 A feature is not complete when code exists only in the backend or when a UI control exists without a working implementation.
 
+
+## IdealState Engine — 10-Phase Roadmap
+
+The forthcoming IdealState Engine work is governed by the repository master roadmap at docs/IDEAL_STATE_ENGINE_ROADMAP.md.
+
+The roadmap contains exactly 10 phases. New requirements discovered during an active phase must be integrated into that phase when related; the coding AI must report any genuine roadmap deviation before implementation. No parallel V2 architecture or duplicate Central Unit/engine/queue is permitted.
+
+### Current roadmap status
+
+- Phase 1: Planned / audit and consolidation
+- Phase 2: Planned / 30°C idle Ideal State foundation
+- Phase 3: Planned / environmental thermal intelligence
+- Phase 4: Planned / maximum battery saving
+- Phase 5: Planned / charging optimization and restoration
+- Phase 6: In Development / charging-speed telemetry hardening
+- Phase 7: In Development / centralized announcement behavior
+- Phase 8: Planned / permissions and advanced capabilities
+- Phase 9: Planned / monitoring UI and widgets
+- Phase 10: Planned / final integration and runtime verification
 
 ## README Maintenance & Feature Verification Policy
 
