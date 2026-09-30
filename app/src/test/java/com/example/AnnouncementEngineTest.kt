@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.model.BatteryTelemetry
 import com.example.model.BluetoothDeviceItem
+import com.example.model.CanonicalChargingSpeed
+import com.example.model.CanonicalPluggedType
+import com.example.model.NetraCentralState
 import com.example.service.AnnouncementEngine
 import com.example.service.AnnouncementItem
 import com.example.service.AnnouncementPriority
@@ -78,9 +81,7 @@ class AnnouncementEngineTest {
 
     @Test
     fun `test night protection hours calculation`() {
-        // Between 23:00 and 06:00
         val isNight1 = engine.isNightTime(23, 6)
-        // Check logic handles wrap-around hours correctly
         assertNotNull(isNight1)
     }
 
@@ -107,7 +108,6 @@ class AnnouncementEngineTest {
         )
 
         engine.onBluetoothDevicesUpdate(listOf(device))
-        // Verify no crash and handles updates cleanly
         assertNotNull(device.batteryPercent)
         assertEquals(60, device.batteryPercent)
     }
@@ -116,7 +116,44 @@ class AnnouncementEngineTest {
     fun `test media playback controller safe initialization`() {
         val controller = com.example.util.MediaPlaybackController(context)
         assertFalse(controller.isMediaPlaying())
-        // Restoring when media was not playing should never crash or force media to play
         controller.restoreAfterAnnouncement()
+    }
+
+    @Test
+    fun `test raw power vs net power speed separation requirements`() {
+        val state1 = NetraCentralState(
+            batteryLevel = 50,
+            isCharging = true,
+            powerWatts = 15f,         // Raw Power = 15W -> FAST display speed
+            netPowerWatts = 9f,        // Net Power = 9W -> NORMAL announcement speed
+            chargingSpeed = CanonicalChargingSpeed.FAST,
+            announcementSpeed = CanonicalChargingSpeed.NORMAL
+        )
+        assertEquals(CanonicalChargingSpeed.FAST, state1.chargingSpeed)
+        assertEquals(CanonicalChargingSpeed.NORMAL, state1.announcementSpeed)
+
+        val state2 = NetraCentralState(
+            batteryLevel = 50,
+            isCharging = true,
+            powerWatts = 22f,         // Raw Power = 22W -> ULTRA_FAST display speed
+            netPowerWatts = 19f,       // Net Power = 19W -> FAST announcement speed
+            chargingSpeed = CanonicalChargingSpeed.ULTRA_FAST,
+            announcementSpeed = CanonicalChargingSpeed.FAST
+        )
+        assertEquals(CanonicalChargingSpeed.ULTRA_FAST, state2.chargingSpeed)
+        assertEquals(CanonicalChargingSpeed.FAST, state2.announcementSpeed)
+    }
+
+    @Test
+    fun `test net power unavailable yields no fabricated announcement speed`() {
+        val state = NetraCentralState(
+            batteryLevel = 50,
+            isCharging = true,
+            powerWatts = 12f,
+            netPowerWatts = null, // Unavailable
+            chargingSpeed = CanonicalChargingSpeed.FAST,
+            announcementSpeed = CanonicalChargingSpeed.UNAVAILABLE
+        )
+        assertEquals(CanonicalChargingSpeed.UNAVAILABLE, state.announcementSpeed)
     }
 }

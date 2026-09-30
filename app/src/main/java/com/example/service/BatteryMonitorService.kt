@@ -84,7 +84,7 @@ class BatteryMonitorService : Service() {
         serviceScope.launch {
             try {
                 val devices = com.example.util.BluetoothHelper.getBluetoothDevices(this@BatteryMonitorService)
-                NetraApplication.instance.announcementEngine.onBluetoothDevicesUpdate(devices)
+                NetraApplication.instance.centralDataCenter.processBluetoothDevices(devices)
             } catch (_: Exception) {}
         }
     }
@@ -331,10 +331,7 @@ class BatteryMonitorService : Service() {
             NetraApplication.instance.powerProfileManager.onTelemetryUpdate(telemetry)
         } catch (_: Exception) {}
 
-        // Evaluate Voice Announcements Engine
-        try {
-            NetraApplication.instance.announcementEngine.onTelemetryUpdate(telemetry)
-        } catch (_: Exception) {}
+        // Voice Announcements are managed autonomously by collecting central events inside AnnouncementEngine
 
         // Evaluate Telemetry & Runtime Sentinel health supervision
         try {

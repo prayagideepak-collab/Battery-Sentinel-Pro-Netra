@@ -265,7 +265,7 @@ class NetraCentralDataCenterTest {
         dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_UNKNOWN, -1, 0, 0, 0, null, null)
         dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 3000000, null, null)
 
-        assertEquals(2, events.count { it.eventType == NetraEventType.SPEED_CHANGED })
+        assertEquals(1, events.count { it.eventType == NetraEventType.SPEED_CHANGED })
         job.cancel()
     }
 
@@ -289,7 +289,7 @@ class NetraCentralDataCenterTest {
         assertNull(state.batteryLevel)
         assertNull(state.temperatureCelsius)
         assertNull(state.voltageMv)
-        assertNull(state.currentMa)
+        assertEquals(0, state.currentMa)
         assertNull(state.powerWatts)
         assertEquals(CanonicalChargingSpeed.UNAVAILABLE, state.chargingSpeed)
     }
@@ -403,5 +403,36 @@ class NetraCentralDataCenterTest {
 
         assertEquals(firstStart, secondStart)
         assertEquals(firstConnected, secondConnected)
+    }
+
+    @Test
+    fun `test field-level retention when subsequent sample lacks temperature or voltage`() = runTest(testDispatcher) {
+        // First sample has valid temperature and voltage
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 310, 4100, -500000, true, 80)
+        val state1 = dataCenter.centralState.value
+        assertEquals(50, state1.batteryLevel)
+        assertEquals(31.0f, state1.temperatureCelsius!!, 0.01f)
+        assertEquals(4100, state1.voltageMv)
+        assertEquals(true, state1.bluetoothConnected)
+        assertEquals(80, state1.bluetoothBatteryPercent)
+
+        // Second sample has missing temperature (raw = 0), missing voltage (0), missing bluetooth
+        dataCenter.processRawInput(51, 100, android.os.BatteryManager.BATTERY_STATUS_DISCHARGING, 0, 0, 0, -600000, null, null)
+        val state2 = dataCenter.centralState.value
+
+        assertEquals(51, state2.batteryLevel)
+        // Previous valid temperature and voltage must be retained!
+        assertEquals(31.0f, state2.temperatureCelsius!!, 0.01f)
+        assertEquals(4100, state2.voltageMv)
+        // Bluetooth connection state must be retained!
+        assertEquals(true, state2.bluetoothConnected)
+        assertEquals(80, state2.bluetoothBatteryPercent)
+    }
+
+    @Test
+    fun `test zero current is treated as valid numeric data`() = runTest(testDispatcher) {
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 0, null, null)
+        val state = dataCenter.centralState.value
+        assertEquals(0, state.currentMa)
     }
 }

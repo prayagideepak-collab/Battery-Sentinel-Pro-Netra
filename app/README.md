@@ -9,7 +9,8 @@ Battery Sentinel Pro Nethra is an advanced, ultra-low power 24/7 battery and the
 3. **Persistent Battery Notification (Part 7)**: One single Central Unit-driven persistent foreground notification (`BatteryMonitorService`) that automatically renders charging, discharging, or idle states, displaying raw incoming power, canonical speed categories, session durations, ETAs, and thermal readings without any local notification-side calculations.
 4. **Central State & Events**: Canonical state and events (`NetraCentralState`, `NetraCentralEvent`) decouple instantaneous telemetry readings from meaningful state transitions.
 5. **Live Updates & ETA**: Continuous live numeric power updates and sliding-window historical ETA estimation for both charging and discharging sessions exposed across UI, notification, and widget services without redundant polling.
-6. **Navigation**: Clean 5-tab Material 3 bottom navigation:
+6. **Centralized Announcement Engine (Part 8)**: Autonomous, event-driven announcement engine driven exclusively by `NetraCentralDataCenter` central events. driven by a single-threaded priority queue prioritizing critical thermal events, with strict duplicate prevention, startup baseline checks (preventing startup announcement spam), and obsolete battery boundary pruning. Displays raw charging speed on-screen, but speaks the net effective charging speed category (derived from net effective power) to ensure truthfulness in audio outputs. Supports thermal warnings, charging session starts/connections, discharging transitions, and Bluetooth connections/battery boundaries under the strict control of the Central Unit.
+7. **Navigation**: Clean 5-tab Material 3 bottom navigation:
    - **Home**
    - **Battery** (Dynamic charging/discharging/idle states)
    - **Monitoring** (Thermal, RAM, CPU, storage, logs)
@@ -18,4 +19,4 @@ Battery Sentinel Pro Nethra is an advanced, ultra-low power 24/7 battery and the
 
 ## Verification Status
 - **Gradle Build**: Verified & Compiling Successfully (`Build succeeded`).
-- **Unit Tests**: Verified with Robolectric test suite.
+- **Unit Tests**: Verified with complete Robolectric test suite (43/43 tests passing successfully).

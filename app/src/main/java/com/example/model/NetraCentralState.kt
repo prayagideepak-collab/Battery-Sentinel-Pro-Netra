@@ -32,6 +32,7 @@ data class NetraCentralState(
     val announcementSpeed: CanonicalChargingSpeed = CanonicalChargingSpeed.UNAVAILABLE, // Based on net effective power
     val bluetoothConnected: Boolean? = null,
     val bluetoothBatteryPercent: Int? = null,
+    val bluetoothDevices: List<BluetoothDeviceItem> = emptyList(),
     val lastUpdateTimestamp: Long = 0L,
     val isDataFresh: Boolean = false,
     // ETAs (null if unavailable)
