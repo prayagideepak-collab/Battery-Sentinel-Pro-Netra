@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.model.DotState
+import com.example.model.hasCompleteLegacyReading
 import com.example.ui.components.CircularBatteryGauge
 import com.example.ui.components.SentinelCard
 import com.example.ui.components.SparklineChart
@@ -96,6 +97,7 @@ fun StatusScreen(
     val quickActionsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
+    val canonical by viewModel.canonicalState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val sparklineRecords by viewModel.sparkline1HourRecords.collectAsStateWithLifecycle()
     val totalRecords by viewModel.totalRecordCount.collectAsStateWithLifecycle()
@@ -113,6 +115,14 @@ fun StatusScreen(
     val isDeepAiLoading by viewModel.isDeepAiLoading.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
+    if (!telemetry.isDataAvailable || !canonical.hasCompleteLegacyReading()) {
+        Column(modifier = modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("Battery telemetry incomplete", color = MaterialTheme.colorScheme.onSurface)
+            CircularBatteryGauge(canonical = canonical)
+            Text("Other readings and diagnostics will appear after a complete device sample.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
 
     Column(
         modifier = modifier
@@ -123,7 +133,7 @@ fun StatusScreen(
     ) {
 
         // 🔥 Critical Overheat Banner (>45°C)
-        AnimatedVisibility(visible = telemetry.isCriticalOverheat) {
+        AnimatedVisibility(visible = canonical.temperatureCelsius?.let { it >= 45f } == true) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -151,7 +161,7 @@ fun StatusScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "🔥 CRITICAL OVERHEAT: ${String.format("%.1f", telemetry.temperature)}°C",
+                            text = "🔥 CRITICAL OVERHEAT: ${canonical.temperatureCelsius?.let { String.format("%.1f", it) } ?: "Unavailable"}°C",
                             color = DangerRed,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold
@@ -176,7 +186,7 @@ fun StatusScreen(
             trailingAction = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Service: Stream Connected",
+                        text = if (telemetry.isDataAvailable) "Service: Stream Connected" else "Waiting for complete data",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = NetraEmerald
@@ -184,7 +194,7 @@ fun StatusScreen(
                 }
             }
         ) {
-            CircularBatteryGauge(telemetry = telemetry)
+            CircularBatteryGauge(canonical = canonical)
         }
 
         // Gemini AI Battery & Thermal Diagnostic Intelligence
