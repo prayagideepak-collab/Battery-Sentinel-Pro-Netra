@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import com.example.model.BatteryTelemetry
+import com.example.ui.components.OptimalChargingWindowCard
 import com.example.ui.components.NightChargingThrottleCard
 import com.example.ui.components.BatteryHealthTrendLineChart
 import com.example.ui.components.ThermalAppCorrelationHeatmap
@@ -46,6 +47,7 @@ class TruthfulnessCardRenderTest {
                         onToggleFeature = {}, onSelectWakeHour = {},
                         modifier = Modifier.padding(top = 20.dp)
                     )
+                    OptimalChargingWindowCard(emptyList(), emptyList(), Modifier.padding(top = 20.dp))
                 }
             }
         }
