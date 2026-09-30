@@ -43,15 +43,19 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.model.DotState
+import com.example.model.hasCompleteLegacyReading
 import com.example.ui.components.CircularBatteryGauge
 import com.example.ui.components.SentinelCard
 import com.example.ui.components.SparklineChart
@@ -79,14 +84,20 @@ import com.example.ui.theme.StatusRed
 import com.example.util.UsageStatsHelper
 import com.example.viewmodel.NetraViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatusScreen(
     viewModel: NetraViewModel,
     onNavigateTab: (NetraTab) -> Unit,
+    onOpenGraph: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var showQuickActionsSheet by remember { mutableStateOf(false) }
+    val quickActionsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
+    val canonical by viewModel.canonicalState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val sparklineRecords by viewModel.sparkline1HourRecords.collectAsStateWithLifecycle()
     val totalRecords by viewModel.totalRecordCount.collectAsStateWithLifecycle()
@@ -114,7 +125,7 @@ fun StatusScreen(
     ) {
 
         // 🔥 Critical Overheat Banner (>45°C)
-        AnimatedVisibility(visible = telemetry.isCriticalOverheat) {
+        AnimatedVisibility(visible = canonical.temperatureCelsius?.let { it >= 45f } == true) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -142,7 +153,7 @@ fun StatusScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "🔥 CRITICAL OVERHEAT: ${String.format("%.1f", telemetry.temperature)}°C",
+                            text = "🔥 CRITICAL OVERHEAT: ${canonical.temperatureCelsius?.let { String.format("%.1f", it) } ?: "Unavailable"}°C",
                             color = DangerRed,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold
@@ -167,7 +178,7 @@ fun StatusScreen(
             trailingAction = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Service: Stream Connected",
+                        text = if (telemetry.isDataAvailable) "Service: Stream Connected" else "Waiting for complete data",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = NetraEmerald
@@ -175,7 +186,7 @@ fun StatusScreen(
                 }
             }
         ) {
-            CircularBatteryGauge(telemetry = telemetry)
+            CircularBatteryGauge(canonical = canonical)
         }
 
         // Gemini AI Battery & Thermal Diagnostic Intelligence
@@ -295,6 +306,31 @@ fun StatusScreen(
             onCancelCalibration = { viewModel.cancelCalibration() },
             onAdvanceStep = { viewModel.advanceCalibrationStep() }
         )
+
+        // Quick Drain Actions Master Trigger Card
+        SentinelCard(
+            title = "Quick Power Savers",
+            icon = Icons.Default.Bolt,
+            dotState = if (settings.ultraBatterySaverActive) DotState.THROTTLED else DotState.CONNECTED,
+            accentColor = NetraCyan,
+            trailingAction = {
+                Button(
+                    onClick = { showQuickActionsSheet = true },
+                    modifier = Modifier.testTag("open_quick_actions_button"),
+                    colors = ButtonDefaults.buttonColors(containerColor = NetraCyan, contentColor = Color.Black)
+                ) {
+                    Icon(imageVector = Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Quick Toggles", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        ) {
+            Text(
+                text = "Instant toggles to shut off battery-draining radios (Bluetooth, Wi-Fi search, GPS location polling, background account sync, and 0Hz animations).",
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         // Dynamic Power-Saving Profile System
         val profileState by viewModel.powerProfileState.collectAsStateWithLifecycle()
@@ -660,12 +696,18 @@ fun StatusScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(
-                onClick = { onNavigateTab(NetraTab.GRAPH) },
+                onClick = onOpenGraph,
                 modifier = Modifier.fillMaxWidth().testTag("view_full_graph_button")
             ) {
                 Text("Open Interactive Telemetry Graph", fontSize = 12.sp)
             }
         }
+
+        // CSV Telemetry Export Card
+        com.example.ui.components.CsvExportCard(
+            viewModel = viewModel,
+            totalRecords = totalRecords
+        )
 
         // J. Activity & Updates
         SentinelCard(
@@ -691,6 +733,14 @@ fun StatusScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+    }
+
+    if (showQuickActionsSheet) {
+        com.example.ui.components.QuickDrainActionsBottomSheet(
+            viewModel = viewModel,
+            sheetState = quickActionsSheetState,
+            onDismiss = { showQuickActionsSheet = false }
+        )
     }
 }
 

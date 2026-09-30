@@ -188,9 +188,14 @@ object GeminiAiService {
             )
         } catch (e: Exception) {
             Log.e(TAG, "JSON Parse failure, creating fallback", e)
-            generateLocalFallback(
-                BatteryTelemetry(temperature = 34.5f, level = 82),
-                isThinking = isThinking
+            AiDiagnosticResult(
+                summary = "Diagnostic response could not be read; telemetry unavailable for this response.",
+                thermalAnalysis = "Unavailable",
+                degradationRisk = "Unavailable",
+                optimalChargingAdvice = "Unavailable",
+                recommendedActions = emptyList(),
+                modelUsed = "Local fallback",
+                isThinkingMode = isThinking
             )
         }
     }
@@ -205,7 +210,7 @@ object GeminiAiService {
             - Instantaneous Current: ${t.currentMa} mA
             - Active Power: ${t.powerWatts} W
             - Thermal Velocity: ${t.thermalVelocity} °C/min
-            - Calculated Health Score: ${t.healthScore}/100 (${t.healthGrade})
+            - Capacity Health Score: ${t.healthScore?.let { "$it/100" } ?: "Unavailable"} (${t.healthGrade})
             Provide a quick diagnostic assessment in JSON format.
         """.trimIndent()
     }
@@ -239,16 +244,17 @@ object GeminiAiService {
         }
 
         val degradation = when {
-            t.healthScore > 90 -> "Low Degradation Risk (Grade ${t.healthGrade}). Chemistry is well preserved."
-            t.healthScore > 75 -> "Moderate Degradation Trajectory. Minor capacity fade detected from past heat cycles."
-            else -> "Elevated Degradation Risk. Frequent deep discharges and high temperatures recorded."
+            t.healthScore == null -> "Capacity degradation cannot be determined from current Android telemetry."
+            t.healthScore > 90 -> "Estimated lower degradation risk (Grade ${t.healthGrade})."
+            t.healthScore > 75 -> "Estimated moderate degradation risk; confirm with longer-term measured history."
+            else -> "Estimated elevated degradation risk; confirm with longer-term measured history."
         }
 
         val advice = if (t.isCharging) {
             if (t.level >= 80) "Battery is at ${t.level}%. Disconnecting now prevents high voltage dwell stress (4.35V+)."
-            else "Charging actively at ${String.format("%.2f", t.powerWatts)}W. Target 80% SoC for optimal lifespan."
+            else "Charging actively at ${String.format("%.2f", t.powerWatts ?: 0f)}W. Target 80% SoC for optimal lifespan."
         } else {
-            "Discharging at ~${String.format("%.2f", kotlin.math.abs(t.powerWatts))}W. Recharge before dipping below 20%."
+            "Discharging at ~${String.format("%.2f", kotlin.math.abs(t.powerWatts ?: 0f))}W. Recharge before dipping below 20%."
         }
 
         val actions = mutableListOf(
@@ -258,7 +264,7 @@ object GeminiAiService {
         )
 
         return AiDiagnosticResult(
-            summary = "Netra Sentinel Engine: Battery operating at ${t.level}% (${t.temperature}°C, ${t.voltageMv}mV). Overall health score: ${t.healthScore}/100.",
+            summary = "Netra Sentinel Engine: Battery operating at ${t.level}% (${t.temperature}°C, ${t.voltageMv}mV). Capacity health score: ${t.healthScore?.let { "$it/100" } ?: "Unavailable"}.",
             thermalAnalysis = thermalStatus,
             degradationRisk = degradation,
             optimalChargingAdvice = advice,

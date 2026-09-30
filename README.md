@@ -66,18 +66,15 @@ The application is built around these primary pillars:
 
 The application uses a light, professional interface with dynamic battery-aware visual treatment. Dark theme is not part of the primary design.
 
-The main navigation is:
+The main bottom navigation is fixed to exactly five top-level sections:
 
-- **Dashboard**
-- **Charging**
-- **Discharging**
-- **Monitoring**
-- **Devices**
-- **Activity Graph**
-- **Settings**
-- **Activity Log**
+1. **Home**
+2. **Battery**
+3. **Monitoring**
+4. **Devices**
+5. **Settings**
 
-Settings and Activity Log remain directly accessible from the main navigation.
+Charging and Discharging are state-based views inside **Battery**, not separate bottom tabs. Activity, History, Graphs, Logs, Permissions, and other future features belong inside the existing five sections.
 
 ### Dashboard
 
@@ -132,14 +129,15 @@ System monitoring center:
 
 ### Devices
 
-Bluetooth device list with:
+Live connected Bluetooth devices only:
 
-- Device name
-- Type
-- Pairing/connection state
-- Battery level when exposed by Android
+- Connected device name
+- Device type
+- Connection state
+- Battery level only when exposed by supported public Android APIs
 - Supported profile information
-- Other telemetry only when actually available
+- Paired but disconnected devices are hidden
+- No private/reflection API is used to fabricate Bluetooth battery data
 
 ### Activity Graph
 
@@ -262,24 +260,44 @@ Examples of actions that may require Android permission or special access includ
 
 The UI must launch the real Android flow and then refresh the result when the user returns.
 
-## Charging Speed
+## Charging Speed (Raw Incoming Power Model)
 
-The current product classification is:
+The charging speed classification uses **raw incoming charging power only**. 
 
-| Charging power | Classification |
-|---:|---|
-| < 5 W | Slow |
-| 5 W to < 10 W | Normal |
-| 10 W to 20 W | Fast |
-| > 20 W | Ultra Fast |
+- CG / net / effective charging-speed calculation and consumption subtraction have been removed entirely. Phone consumption does not affect charging speed classification.
+- Charging state and charger connection state are strictly independent (`CHARGER_CONNECTED_CHARGING`, `CHARGER_CONNECTED_NOT_CHARGING`, `CHARGER_DISCONNECTED`, `DISCHARGING`).
+- Low-power USB data connections without confirmed active battery charging are not misclassified as slow charging.
 
-Power should be derived from Android-provided voltage/current when those values are available.
+Product classification table:
 
-## Thermal Target
+| Charging power (Raw Incoming) | Classification | Status |
+|---:|---|---|
+| < 5 W | Slow | Verified |
+| 5 W to < 10 W | Normal | Verified |
+| 10 W to 20 W | Fast | Verified |
+| > 20 W | Ultra Fast | Verified |
+| Not Charging / Connected | Unavailable / Not Applicable | Verified |
 
-The core thermal target is **below 40°C**, with a preferred recovery target around **39.5°C** when the application is responding to a high-temperature condition.
+Power is derived strictly from Android battery voltage and current when available. Notifications, announcements, and UI elements all consume this centralized raw power classification.
 
-The exact protective response must remain limited to actions that Android permits.
+## Thermal Critical Control & Protection
+
+- **Critical Thermal Entry:** Triggered when battery temperature exceeds **40.0°C**.
+- **Thermal Recovery:** Resets when battery temperature drops to **≤ 35.0°C**.
+- **Actions:** Minimizes Nethra CPU/background workload, adjusts window brightness toward ~10%, launches ambient sensor diagnostics (`Sensor.TYPE_AMBIENT_TEMPERATURE` where hardware permits), logs canonical events, and broadcasts "Thermal control started."
+
+## Low Battery Control & Power Saving
+
+- **Low Battery Entry:** Triggered when battery drops to **≤ 30%** while discharging.
+- **Low Battery Recovery:** Resets when battery charges or reaches **≥ 35%**.
+- **Actions:** Minimizes background work, adjusts brightness toward ~10%, logs canonical events, and announces "Battery power saving started."
+- **Coexistence:** Thermal and Low Battery controls can be active simultaneously; shared actions execute once and recover independently.
+
+## Night Protection Policy
+
+- **Default Active Hours:** 11:00 PM (23:00) to 6:00 AM (06:00).
+- **Behavior:** Suppresses routine battery and speed announcements while allowing critical thermal and safety alerts.
+- **Backlog Suppression:** Suppressed announcements are dropped immediately and never replayed at 6:00 AM.
 
 ## Battery History
 
@@ -390,3 +408,176 @@ Before considering a feature complete, verify all three layers:
 → the user can see the result, use the control, and understand its current status.
 
 A feature is not complete when code exists only in the backend or when a UI control exists without a working implementation.
+
+
+## README Maintenance & Feature Verification Policy
+
+This README is a **living product specification and public feature record** for Battery Sentinel Pro Nethra.
+
+Whenever a new feature, UI change, permission flow, monitoring capability, backend component, data model, security improvement, release/update mechanism, or other user-visible product change is implemented, the README must be updated in the **same development change**.
+
+### Mandatory rule
+
+A feature must not be described as implemented merely because code was written.
+
+The feature status must be based on verification:
+
+| Status | Meaning |
+|---|---|
+| **Planned** | Defined in the product specification but implementation has not started or is incomplete. |
+| **In Development** | Implementation is actively being worked on and is not yet verified complete. |
+| **Implemented** | Code and the required UI/data flow are present, but final verification is still pending. |
+| **Verified** | Implementation has been checked through the appropriate build/test/runtime/UI verification and the expected result is confirmed. |
+| **Unavailable / Android Limitation** | The requested capability is not exposed or cannot be reliably controlled through the supported Android APIs. |
+
+### Verification rule
+
+When a feature reaches verified status, update the corresponding README section at the same time.
+
+Verification should cover the layers relevant to the feature:
+
+1. **Backend/Data** — the Android API, monitor, repository, database, or controller actually works or reports a truthful limitation.
+2. **State/Navigation** — the result reaches the intended application state and screen.
+3. **UI** — the user can see the result and the related controls respond correctly.
+4. **Build/Test** — the project compiles and applicable tests/checks pass.
+5. **Runtime/UI verification** — where applicable, the feature is exercised in the Android application and its visible result is confirmed.
+
+A feature is **not Verified** merely because an AI coder reports that it completed the task.
+
+### Same-change documentation rule
+
+For every completed feature change:
+
+```
+Implement
+→ Build/Test
+→ Verify
+→ Update README
+→ Commit together
+```
+
+The README update should document, as applicable:
+
+- What changed
+- Where it appears in the application
+- How it works
+- What Android API or data source it uses
+- What user control/action is available
+- What result the user should see
+- Permission requirements
+- Known Android limitations
+- Verification status
+
+### Feature changelog
+
+Use this section to keep a concise chronological record of verified product changes.
+
+| Date | Change | Status |
+|---|---|---|
+| 2026-09-29 | Zero-based product/UI specification established for the Nethra rebuild | In Development |
+| 2026-09-29 | README maintenance and feature-verification policy established | Verified |
+| 2026-09-29 | Central battery state/event normalization hardened; five-tab navigation and connected-only Bluetooth foundation updated | In Development |
+| 2026-09-30 | Part 13: Five-tab screen consolidation & canonical data surfacing | Verified |
+| 2026-09-30 | Part 14: Storage, Cache consolidation & Central Capability Registry | Verified |
+
+Future entries must be added when the corresponding product change is verified. Do not mark a feature **Verified** until the implementation and required checks have actually confirmed it.
+
+## Storage, Cache & Central Capability Registry (Part 14)
+
+### 1. Storage Responsibility & Strict Domain Segregation
+Storage is segregated into distinct, non-competing domains under the sole authority of the Central Unit:
+- **Live Telemetry State**: Held exclusively in `NetraCentralDataCenter` memory via Kotlin `StateFlow`.
+- **Last-Valid State**: Persisted in `netra_last_valid_state_prefs` to enable instant recovery on process recreation or reboot. When restored, fields are strictly labeled `FieldStatus.LAST_VALID` and `isDataFresh = false`. It never competes with fresh incoming telemetry.
+- **User Settings**: Persisted through `SettingsRepository` in `netra_sentinel_prefs`.
+- **History & Analytics**: Persisted locally using Room Database (`NetraDatabase`: `battery_records`, `charging_sessions`).
+- **Temporary Cache**: Managed by `StorageCacheManager` strictly in `context.cacheDir` and `context.externalCacheDir`. Enforces a 200 MB maximum threshold, automated maintenance cleanup during charging (>50 MB after 6 hours), and user-triggered cache cleaning. User databases, settings, and historical battery data are strictly protected.
+- **Activity & Diagnostic Logs**: Persisted in Room Database (`activity_logs`).
+
+### 2. Central Capability Registry
+Android OS version checks and device hardware capabilities are consolidated in `CentralCapabilityRegistry` within the Central Unit architecture:
+- **24 Canonical Capabilities**:
+  1. `BATTERY_TELEMETRY`: Core battery broadcast telemetry (Level, Status, Plugged).
+  2. `BATTERY_TEMPERATURE`: Hardware battery thermal sensor.
+  3. `BATTERY_VOLTAGE`: Raw hardware terminal voltage.
+  4. `BATTERY_CURRENT`: Instantaneous hardware current sensor (detects OEM restriction).
+  5. `BATTERY_CHARGE_COUNTER`: Hardware battery charge counter (microampere-hours).
+  6. `BATTERY_HEALTH_STATUS`: Android battery health diagnostics string.
+  7. `BATTERY_POWER_CALCULATION`: Real-time raw and net power calculation.
+  8. `CHARGING_SPEED_CALCULATION`: Canonical speed tier classification (Slow, Normal, Fast, Ultra Fast).
+  9. `FAST_CHARGING_DETECTION`: Fast charging capability detection.
+  10. `CHARGING_STATE`: Dynamic charging/discharging/idle status sensing.
+  11. `CHARGER_CONNECTION_STATE`: Charger connection and plugged type detection (AC, USB, Wireless).
+  12. `BLUETOOTH_HARDWARE`: Physical Bluetooth adapter presence.
+  13. `BLUETOOTH_LE`: Bluetooth Low Energy (BLE) hardware support.
+  14. `BLUETOOTH_CONNECTED_INFO`: Active connected peripheral telemetry with bound proxy listeners.
+  15. `BLUETOOTH_BATTERY_LEVEL`: Bluetooth Battery Service (BAS) level retrieval.
+  16. `NOTIFICATIONS`: Runtime notification posting permissions.
+  17. `EXACT_ALARM`: Android 12+ exact alarm scheduling support.
+  18. `POWER_SAVE_MODE`: Android system Power Saver status detection.
+  19. `BATTERY_OPTIMIZATION_WHITELIST`: Device battery optimization exemption status.
+  20. `TEXT_TO_SPEECH`: System Text-to-Speech (TTS) engine presence.
+  21. `MEDIA_PLAYBACK_CONTROL`: Audio focus & active media playback control.
+  22. `USAGE_ACCESS`: Android AppOps usage access permission for app battery attribution.
+  23. `BACKGROUND_MONITORING`: 24/7 autonomous battery monitor background service.
+  24. `STORAGE_CACHE_OPERATIONS`: Safe local cache calculation and purge operations.
+- **Truthful Status Classification**: Each capability is mapped to `AVAILABLE`, `SUPPORTED`, `PERMISSION_REQUIRED`, `DISABLED`, `UNAVAILABLE`, or `UNSUPPORTED`. No capability status is fabricated.
+- **User Interface**: Surfaced live on the "Hardware" sub-tab of the Monitoring screen with status indicators and quick-clean cache controls.
+
+### Documentation accuracy
+
+The README must always describe the **current state of the application**, not an outdated intended state.
+
+If a feature is removed, replaced, redesigned, or found to be unsupported by Android, update or remove its README description in the same change.
+
+If an implementation is incomplete, the README must say so rather than presenting the feature as finished.
+
+This rule applies to all future development on the `main` branch.
+
+## Central Unit Architecture & Mandatory Routing Rule
+
+The application must use **one Central Unit / Central Data Authority as the mandatory control point for all functionality**.
+
+### Mandatory architecture rule
+
+Every new, changed, patched, upgraded, or otherwise processed functionality must pass through the Central Unit first.
+
+```
+New / Existing / Updated Process
+            ↓
+       Central Unit
+            ↓
+ Inspect → Validate → Normalize → Compare
+            ↓
+ Duplicate? → Reject / remove duplicate
+ New? → Register / integrate
+ Improvement / Patch / New Version?
+        → identify and integrate
+            ↓
+       Approve / Route
+            ↓
+     Actual Application Layer
+```
+
+No feature, process, state transition, calculation, service action, repository operation, notification data path, announcement path, permission flow, monitoring path, or other application functionality may independently establish a competing implementation outside the Central Unit.
+
+The Central Unit is responsible for:
+
+- detecting whether functionality already exists;
+- identifying duplicate or conflicting implementations;
+- identifying a genuinely new implementation;
+- identifying improvements, patches, fixes, or newer versions of an existing implementation;
+- integrating compatible improvements into the existing implementation;
+- rejecting/removing true duplicates rather than allowing parallel implementations;
+- maintaining one authoritative path for each responsibility;
+- controlling how approved functionality is routed to the rest of the application.
+
+### Existing-code integration rule
+
+Before adding code, inspect the existing implementation.
+
+If compatible code already exists, extend/integrate it through the Central Unit instead of creating a second implementation.
+
+Only create a new component when the required capability genuinely does not exist or existing code cannot technically support it.
+
+This rule applies to all future development on the `main` branch and to every Part of the sequential implementation plan.
+

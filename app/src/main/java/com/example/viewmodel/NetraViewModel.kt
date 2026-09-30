@@ -33,9 +33,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+import kotlinx.coroutines.flow.map
 
 enum class TimeWindowFilter {
     ONE_HOUR,
@@ -96,6 +100,9 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
     // Dynamic Power-Saving Profile State
     val powerProfileState = NetraApplication.instance.powerProfileManager.profileState
 
+    // Central State
+    val canonicalState = NetraApplication.instance.centralDataCenter.centralState
+
     // Charging & Discharging Lists
     val recentChargingSessions: StateFlow<List<ChargingSession>> = repository.recentChargingSessions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -112,9 +119,14 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
         repository.getLogsByCategory(cat)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Bluetooth Devices State
-    private val _bluetoothDevices = MutableStateFlow<List<BluetoothDeviceItem>>(emptyList())
-    val bluetoothDevices: StateFlow<List<BluetoothDeviceItem>> = _bluetoothDevices.asStateFlow()
+    // Bluetooth Devices State (Streaming strictly from Central Unit)
+    val bluetoothDevices: StateFlow<List<BluetoothDeviceItem>> = NetraApplication.instance.centralDataCenter.centralState
+        .map { it.bluetoothDevices }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val bluetoothHistory: StateFlow<List<BluetoothDeviceItem>> = NetraApplication.instance.centralDataCenter.centralState
+        .map { it.bluetoothHistory }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // App Usage Drain State
     private val _appUsageDrain = MutableStateFlow<List<AppUsageItem>>(emptyList())
@@ -181,7 +193,8 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
         val app = getApplication<Application>()
         _systemPermissions.value = PermissionHelper.checkAllPermissions(app)
         viewModelScope.launch(Dispatchers.IO) {
-            _bluetoothDevices.value = BluetoothHelper.getBluetoothDevices(app)
+            val list = BluetoothHelper.getBluetoothDevices(app)
+            NetraApplication.instance.centralDataCenter.processBluetoothDevices(list)
             _appUsageDrain.value = UsageStatsHelper.getAppUsageDrainList(app)
         }
     }
@@ -270,6 +283,120 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNightTargetWakeHour(hour: Int) {
         settingsRepository.setNightTargetWakeHour(hour)
+    }
+
+    fun setWidgetThemeColor(colorName: String) {
+        settingsRepository.setWidgetThemeColor(colorName)
+    }
+
+    fun setWidgetRefreshInterval(minutes: Int) {
+        settingsRepository.setWidgetRefreshInterval(minutes)
+    }
+
+    fun setWidgetBackgroundStyle(styleName: String) {
+        settingsRepository.setWidgetBackgroundStyle(styleName)
+    }
+
+    // Voice Announcement Engine Controls
+    fun setAnnouncementsMasterEnabled(enabled: Boolean) {
+        settingsRepository.setAnnouncementsMasterEnabled(enabled)
+    }
+
+    fun setAnnouncePhoneBattery(enabled: Boolean) {
+        settingsRepository.setAnnouncePhoneBattery(enabled)
+    }
+
+    fun setAnnounceBluetoothBattery(enabled: Boolean) {
+        settingsRepository.setAnnounceBluetoothBattery(enabled)
+    }
+
+    fun setAnnounceChargerConnected(enabled: Boolean) {
+        settingsRepository.setAnnounceChargerConnected(enabled)
+    }
+
+    fun setAnnounceChargingSpeed(enabled: Boolean) {
+        settingsRepository.setAnnounceChargingSpeed(enabled)
+    }
+
+    fun setAnnounceThermalWarning(enabled: Boolean) {
+        settingsRepository.setAnnounceThermalWarning(enabled)
+    }
+
+    fun setNightProtectionEnabled(enabled: Boolean) {
+        settingsRepository.setNightProtectionEnabled(enabled)
+    }
+
+    fun setNightSchedule(startHour: Int, endHour: Int) {
+        settingsRepository.setNightSchedule(startHour, endHour)
+    }
+
+    fun setMediaPlaybackHandlingEnabled(enabled: Boolean) {
+        settingsRepository.setMediaPlaybackHandlingEnabled(enabled)
+    }
+
+    fun testVoiceAnnouncement(sampleText: String? = null) {
+        val text = sampleText ?: if (liveTelemetry.value.isCharging) {
+            "C ${liveTelemetry.value.level} percent"
+        } else {
+            "D ${liveTelemetry.value.level} percent"
+        }
+        NetraApplication.instance.announcementEngine.speakDirect(text)
+    }
+
+    // One-Tap Ultra Battery Saver Toggle
+    fun toggleUltraBatterySaver() {
+        val current = settingsRepository.settings.value.ultraBatterySaverActive
+        val target = !current
+        settingsRepository.setUltraBatterySaverActive(target)
+
+        if (target) {
+            // Engage ultra saver profile & 0Hz animation restriction
+            NetraApplication.instance.powerProfileManager.setPowerProfile(
+                com.example.model.PowerProfileMode.ULTRA_SAVER,
+                liveTelemetry.value
+            )
+            settingsRepository.setPowerSaverEnabled(true)
+        } else {
+            // Restore smart adaptive profile
+            NetraApplication.instance.powerProfileManager.setPowerProfile(
+                com.example.model.PowerProfileMode.SMART_ADAPTIVE,
+                liveTelemetry.value
+            )
+        }
+
+        viewModelScope.launch {
+            repository.logEvent(
+                title = if (target) "⚡ Ultra Battery Saver Engaged" else "Ultra Battery Saver Disabled",
+                message = if (target) "Background network sync restricted, display capped to 30%, and UI animations throttled to 0Hz." else "Restored normal background sync and full animation refresh rates.",
+                category = "SYSTEM",
+                severity = if (target) "WARNING" else "INFO",
+                dotColor = if (target) "RED" else "GREEN"
+            )
+        }
+    }
+
+    // Export Telemetry to CSV
+    fun exportTelemetryCsv(context: android.content.Context, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val records = repository.getRecordsSince(0L).first()
+            val sessions = repository.recentChargingSessions.first()
+            val logs = repository.recentLogs.first()
+
+            val csvFile = com.example.util.BatteryCsvExporter.exportTelemetryToCsv(context, records, sessions, logs)
+            if (csvFile != null) {
+                com.example.util.BatteryCsvExporter.shareCsvFile(context, csvFile)
+                repository.logEvent(
+                    title = "Battery Telemetry Exported (CSV)",
+                    message = "Exported ${records.size} telemetry points and ${sessions.size} charging sessions to ${csvFile.name}.",
+                    category = "SYSTEM",
+                    severity = "INFO",
+                    dotColor = "BLUE"
+                )
+                onComplete(true)
+            } else {
+                onComplete(false)
+            }
+        }
     }
 
     fun clearDatabase() {
@@ -379,6 +506,32 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
             val aiMsg = LongevityChatMessage(text = answer, isUser = false)
             _chatMessages.value = _chatMessages.value + aiMsg
             _isChatLoading.value = false
+        }
+    }
+
+    // Storage & Cache Stats & Control (Centralized via StorageCacheManager)
+    val cacheStats: StateFlow<com.example.data.repository.CacheStorageStats> =
+        NetraApplication.instance.storageCacheManager.cacheStats
+
+    fun refreshCacheStats() {
+        NetraApplication.instance.storageCacheManager.refreshCacheStats()
+    }
+
+    fun cleanCache(onResult: (Long) -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val freedBytes = NetraApplication.instance.storageCacheManager.cleanCache(force = true)
+            if (freedBytes > 0) {
+                repository.logEvent(
+                    title = "Temporary Cache Cleaned",
+                    message = "Freed ${freedBytes / 1024} KB of temporary cache safely without touching user databases or settings.",
+                    category = "SYSTEM",
+                    severity = "INFO",
+                    dotColor = "CYAN"
+                )
+            }
+            withContext(Dispatchers.Main) {
+                onResult(freedBytes)
+            }
         }
     }
 

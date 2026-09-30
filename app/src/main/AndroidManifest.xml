@@ -80,6 +80,18 @@
                 android:resource="@xml/netra_battery_widget_info" />
         </receiver>
 
+        <!-- Long-Term Health Degradation Sparkline Widget -->
+        <receiver
+            android:name=".widget.NetraDegradationSparklineWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/netra_degradation_widget_info" />
+        </receiver>
+
         <!-- FileProvider for Sharing & Viewing Generated Battery PDF Reports -->
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -1,0 +1,34 @@
+package com.example.model
+
+enum class NetraEventType {
+    CHARGER_CONNECTED,
+    CHARGER_DISCONNECTED,
+    CHARGER_CONNECTED_NOT_CHARGING,
+    CHARGING_STARTED,
+    CHARGING_STOPPED,
+    DISCHARGING_STARTED,
+    SPEED_CHANGED,
+    BATTERY_LEVEL_CROSSED,
+    TEMPERATURE_STATE_CHANGED,
+    BLUETOOTH_CONNECTED,
+    BLUETOOTH_DISCONNECTED,
+    BLUETOOTH_BATTERY_BOUNDARY,
+    THERMAL_WARNING,
+    THERMAL_CRITICAL,
+    THERMAL_RECOVERED,
+    THERMAL_PROTECTION_STARTED,
+    THERMAL_PROTECTION_RECOVERED,
+    LOW_BATTERY_PROTECTION_STARTED,
+    LOW_BATTERY_PROTECTION_RECOVERED,
+    UNAVAILABLE
+}
+
+data class NetraCentralEvent(
+    val eventId: String,
+    val eventType: NetraEventType,
+    val timestamp: Long = System.currentTimeMillis(),
+    val previousValue: String? = null,
+    val newValue: String? = null,
+    val source: String = "unknown",
+    val identityKey: String = eventId
+)

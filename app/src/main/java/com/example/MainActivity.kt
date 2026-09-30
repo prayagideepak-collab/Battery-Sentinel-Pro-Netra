@@ -1,7 +1,6 @@
 package com.example
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -14,19 +13,15 @@ import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
@@ -49,23 +44,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.model.DotState
 import com.example.ui.components.StatusDot
 import com.example.ui.navigation.NetraBottomNav
 import com.example.ui.navigation.NetraTab
-import com.example.ui.screens.AppBatteryUsageScreen
-import com.example.ui.screens.ChargingScreen
+import com.example.ui.screens.BatteryScreen
 import com.example.ui.screens.DevicesScreen
-import com.example.ui.screens.DischargingScreen
-import com.example.ui.screens.GraphScreen
-import com.example.ui.screens.LogsScreen
 import com.example.ui.screens.MonitoringScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StatusScreen
@@ -74,8 +62,6 @@ import com.example.ui.theme.NetraCyan
 import com.example.ui.theme.NetraDarkBg
 import com.example.ui.theme.NetraEmerald
 import com.example.ui.theme.NetraSurface
-import com.example.ui.theme.StatusAmber
-import com.example.ui.theme.StatusGreen
 import com.example.ui.theme.StatusRed
 import com.example.viewmodel.NetraViewModel
 
@@ -86,6 +72,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        try {
+            com.example.service.BatteryMonitorService.startService(this)
+        } catch (_: Exception) {}
 
         setContent {
             MyApplicationTheme {
@@ -103,8 +93,27 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppContent(viewModel: NetraViewModel) {
-    var currentTab by remember { mutableStateOf(NetraTab.STATUS) }
+    var currentTab by remember { mutableStateOf(NetraTab.HOME) }
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
+    val canonical by viewModel.canonicalState.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Thermal & Low Battery Brightness Protection Lock
+    LaunchedEffect(canonical.targetBrightnessPercent) {
+        val activity = context as? ComponentActivity
+        val window = activity?.window
+        val target = canonical.targetBrightnessPercent
+        if (window != null) {
+            val lp = window.attributes
+            if (target != null) {
+                lp.screenBrightness = (target / 100f).coerceIn(0.01f, 1.0f)
+            } else {
+                lp.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            }
+            window.attributes = lp
+        }
+    }
 
     // Request permissions on startup gracefully
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -126,9 +135,9 @@ fun MainAppContent(viewModel: NetraViewModel) {
         }
     }
 
-    // BackHandler: return to Status tab if on secondary tab
-    BackHandler(enabled = currentTab != NetraTab.STATUS) {
-        currentTab = NetraTab.STATUS
+    // BackHandler: return to Home tab if on secondary tab
+    BackHandler(enabled = currentTab != NetraTab.HOME) {
+        currentTab = NetraTab.HOME
     }
 
     Scaffold(
@@ -207,18 +216,30 @@ fun MainAppContent(viewModel: NetraViewModel) {
                             StatusDot(state = telemetry.serviceDotState, size = 6.dp)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "${telemetry.level}%",
+                                text = canonical.batteryLevel?.let { "$it%" } ?: "Unavailable",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (telemetry.isCharging) NetraCyan else NetraEmerald
+                                color = if (canonical.isCharging == true) NetraCyan else NetraEmerald
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "• ${String.format("%.1f", telemetry.temperature)}°C",
+                                text = canonical.temperatureCelsius?.let { "• ${String.format("%.1f", it)}°C" } ?: "• Temp unavailable",
                                 fontSize = 11.sp,
-                                color = if (telemetry.temperature >= 40f) StatusRed else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if ((canonical.temperatureCelsius ?: 0f) >= 40f) StatusRed else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                    IconButton(
+                        onClick = { viewModel.toggleUltraBatterySaver() },
+                        modifier = Modifier.testTag("top_bar_ultra_saver_button")
+                    ) {
+                        val isUltraActive = settings.ultraBatterySaverActive
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = "Toggle Ultra Battery Saver",
+                            tint = if (isUltraActive) StatusRed else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                     IconButton(
                         onClick = { viewModel.refreshHardwareState() },
@@ -233,7 +254,7 @@ fun MainAppContent(viewModel: NetraViewModel) {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = NetraDarkBg
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 modifier = Modifier.statusBarsPadding()
             )
@@ -241,28 +262,43 @@ fun MainAppContent(viewModel: NetraViewModel) {
         bottomBar = {
             NetraBottomNav(
                 currentTab = currentTab,
-                onTabSelected = { currentTab = it }
+                onTabSelected = { tab ->
+                    currentTab = tab
+                }
             )
         },
-        containerColor = NetraDarkBg
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        Crossfade(
-            targetState = currentTab,
-            label = "tab_transition",
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-        ) { tab ->
-            when (tab) {
-                NetraTab.STATUS -> StatusScreen(viewModel = viewModel, onNavigateTab = { currentTab = it })
-                NetraTab.CHARGING -> ChargingScreen(viewModel = viewModel)
-                NetraTab.DISCHARGING -> DischargingScreen(viewModel = viewModel)
-                NetraTab.APPS -> AppBatteryUsageScreen(viewModel = viewModel)
-                NetraTab.MONITORING -> MonitoringScreen(viewModel = viewModel)
-                NetraTab.DEVICES -> DevicesScreen(viewModel = viewModel)
-                NetraTab.GRAPH -> GraphScreen(viewModel = viewModel)
-                NetraTab.SETTINGS -> SettingsScreen(viewModel = viewModel)
-                NetraTab.LOGS -> LogsScreen(viewModel = viewModel)
+        ) {
+            val settings by viewModel.settings.collectAsStateWithLifecycle()
+            com.example.ui.components.UltraBatterySaverBanner(
+                isActive = settings.ultraBatterySaverActive,
+                onToggle = { viewModel.toggleUltraBatterySaver() },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+            )
+
+            Crossfade(
+                targetState = currentTab,
+                label = "tab_transition",
+                modifier = Modifier.weight(1f)
+            ) { tab ->
+                when (tab) {
+                    NetraTab.HOME -> StatusScreen(
+                        viewModel = viewModel,
+                        onOpenGraph = { currentTab = NetraTab.BATTERY },
+                        onNavigateTab = { target ->
+                            currentTab = target
+                        }
+                    )
+                    NetraTab.BATTERY -> BatteryScreen(viewModel = viewModel)
+                    NetraTab.MONITORING -> MonitoringScreen(viewModel = viewModel)
+                    NetraTab.DEVICES -> DevicesScreen(viewModel = viewModel)
+                    NetraTab.SETTINGS -> SettingsScreen(viewModel = viewModel)
+                }
             }
         }
     }
