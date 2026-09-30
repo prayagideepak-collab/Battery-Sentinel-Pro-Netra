@@ -53,7 +53,7 @@ fun CircularBatteryGauge(
 ) {
     val animatedProgress by animateFloatAsState(
         targetValue = ((canonical.batteryLevel ?: 0) / 100f).coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 800),
+        animationSpec = tween(durationMillis = 100),
         label = "gauge_progress"
     )
 

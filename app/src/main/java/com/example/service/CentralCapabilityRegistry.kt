@@ -17,6 +17,55 @@ import com.example.model.CapabilityType
 
 class CentralCapabilityRegistry(private val context: Context) {
 
+    // Fast memory cache for static hardware and OS capabilities that never change at runtime
+    private val staticHardwareFeatures = mutableMapOf<CapabilityType, CapabilityStatus>()
+
+    init {
+        detectStaticCapabilities()
+    }
+
+    private fun detectStaticCapabilities() {
+        val pm = context.packageManager
+
+        // Bluetooth Hardware
+        val btAdapter = try {
+            val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+            bm?.adapter ?: BluetoothAdapter.getDefaultAdapter()
+        } catch (_: Exception) { null }
+        val hasBtHardware = pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH) || btAdapter != null
+        staticHardwareFeatures[CapabilityType.BLUETOOTH_HARDWARE] = if (hasBtHardware) CapabilityStatus.SUPPORTED else CapabilityStatus.UNSUPPORTED
+
+        // Bluetooth LE
+        staticHardwareFeatures[CapabilityType.BLUETOOTH_LE] = if (pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            CapabilityStatus.SUPPORTED
+        } else {
+            CapabilityStatus.UNSUPPORTED
+        }
+
+        // Text-to-Speech
+        val ttsIntent = Intent("android.intent.action.TTS_SERVICE")
+        val ttsEngines = try {
+            pm.queryIntentServices(ttsIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        } catch (_: Exception) { emptyList() }
+        staticHardwareFeatures[CapabilityType.TEXT_TO_SPEECH] = if (ttsEngines.isNotEmpty()) CapabilityStatus.AVAILABLE else CapabilityStatus.UNSUPPORTED
+
+        // Media Playback Control
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        staticHardwareFeatures[CapabilityType.MEDIA_PLAYBACK_CONTROL] = if (am != null) CapabilityStatus.AVAILABLE else CapabilityStatus.UNSUPPORTED
+
+        // Storage & Cache Operations
+        staticHardwareFeatures[CapabilityType.STORAGE_CACHE_OPERATIONS] = if (context.cacheDir.canWrite()) CapabilityStatus.AVAILABLE else CapabilityStatus.UNAVAILABLE
+
+        // Background Monitoring
+        staticHardwareFeatures[CapabilityType.BACKGROUND_MONITORING] = CapabilityStatus.AVAILABLE
+
+        // Battery Health Status
+        staticHardwareFeatures[CapabilityType.BATTERY_HEALTH_STATUS] = CapabilityStatus.AVAILABLE
+
+        // Power Save Mode Detection support
+        staticHardwareFeatures[CapabilityType.POWER_SAVE_MODE] = CapabilityStatus.AVAILABLE
+    }
+
     fun detectAllCapabilities(
         currentMicroAmps: Int = 0,
         temperatureRaw: Int = 0,
@@ -73,16 +122,14 @@ class CentralCapabilityRegistry(private val context: Context) {
         map[CapabilityType.CHARGER_CONNECTION_STATE] = CapabilityStatus.AVAILABLE
 
         // 8. Bluetooth Hardware
+        val hasBtHardware = hasBluetoothHardware ?: (staticHardwareFeatures[CapabilityType.BLUETOOTH_HARDWARE] == CapabilityStatus.SUPPORTED)
+        map[CapabilityType.BLUETOOTH_HARDWARE] = if (hasBtHardware) CapabilityStatus.SUPPORTED else CapabilityStatus.UNSUPPORTED
+
+        // 9. Bluetooth Connected Info
         val btAdapter = try {
             val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
             bm?.adapter ?: BluetoothAdapter.getDefaultAdapter()
         } catch (_: Exception) { null }
-
-        val pm = context.packageManager
-        val hasBtHardware = hasBluetoothHardware ?: (pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH) || btAdapter != null)
-        map[CapabilityType.BLUETOOTH_HARDWARE] = if (hasBtHardware) CapabilityStatus.SUPPORTED else CapabilityStatus.UNSUPPORTED
-
-        // 9. Bluetooth Connected Info
         val hasBtPerm = hasBluetoothPermission ?: checkBluetoothPermission()
         val btEnabled = isBluetoothEnabled ?: (btAdapter?.isEnabled == true)
 
@@ -111,14 +158,11 @@ class CentralCapabilityRegistry(private val context: Context) {
         }
         map[CapabilityType.NOTIFICATIONS] = if (notifGranted) CapabilityStatus.AVAILABLE else CapabilityStatus.PERMISSION_REQUIRED
 
-        // 12. Text-to-Speech
-        val ttsIntent = Intent("android.intent.action.TTS_SERVICE")
-        val ttsEngines = pm.queryIntentServices(ttsIntent, PackageManager.MATCH_DEFAULT_ONLY)
-        map[CapabilityType.TEXT_TO_SPEECH] = if (ttsEngines.isNotEmpty()) CapabilityStatus.AVAILABLE else CapabilityStatus.UNSUPPORTED
+        // 12. Text-to-Speech (from fast static cache)
+        map[CapabilityType.TEXT_TO_SPEECH] = staticHardwareFeatures[CapabilityType.TEXT_TO_SPEECH] ?: CapabilityStatus.UNSUPPORTED
 
-        // 13. Media Playback Control
-        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-        map[CapabilityType.MEDIA_PLAYBACK_CONTROL] = if (am != null) CapabilityStatus.AVAILABLE else CapabilityStatus.UNSUPPORTED
+        // 13. Media Playback Control (from fast static cache)
+        map[CapabilityType.MEDIA_PLAYBACK_CONTROL] = staticHardwareFeatures[CapabilityType.MEDIA_PLAYBACK_CONTROL] ?: CapabilityStatus.AVAILABLE
 
         // 14. Usage Access (App battery drain stats)
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
@@ -130,14 +174,13 @@ class CentralCapabilityRegistry(private val context: Context) {
                 it.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
             }
         } ?: AppOpsManager.MODE_DEFAULT
-
         map[CapabilityType.USAGE_ACCESS] = if (mode == AppOpsManager.MODE_ALLOWED) CapabilityStatus.AVAILABLE else CapabilityStatus.PERMISSION_REQUIRED
 
         // 15. Background Monitoring
         map[CapabilityType.BACKGROUND_MONITORING] = CapabilityStatus.AVAILABLE
 
         // 16. Storage & Cache Operations
-        map[CapabilityType.STORAGE_CACHE_OPERATIONS] = if (context.cacheDir.canWrite()) CapabilityStatus.AVAILABLE else CapabilityStatus.UNAVAILABLE
+        map[CapabilityType.STORAGE_CACHE_OPERATIONS] = staticHardwareFeatures[CapabilityType.STORAGE_CACHE_OPERATIONS] ?: CapabilityStatus.AVAILABLE
 
         // 17. Battery Charge Counter
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
@@ -166,11 +209,7 @@ class CentralCapabilityRegistry(private val context: Context) {
         }
 
         // 21. Bluetooth LE (Low Energy)
-        map[CapabilityType.BLUETOOTH_LE] = if (pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-            CapabilityStatus.SUPPORTED
-        } else {
-            CapabilityStatus.UNSUPPORTED
-        }
+        map[CapabilityType.BLUETOOTH_LE] = staticHardwareFeatures[CapabilityType.BLUETOOTH_LE] ?: CapabilityStatus.UNSUPPORTED
 
         // 22. Exact Alarm
         val alarmMgr = context.getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
@@ -186,6 +225,13 @@ class CentralCapabilityRegistry(private val context: Context) {
         // 24. Battery Optimization Whitelist Detection
         val powerMgr = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
         map[CapabilityType.BATTERY_OPTIMIZATION_WHITELIST] = if (powerMgr?.isIgnoringBatteryOptimizations(context.packageName) == true) {
+            CapabilityStatus.AVAILABLE
+        } else {
+            CapabilityStatus.PERMISSION_REQUIRED
+        }
+
+        // 25. Brightness Control Capability
+        map[CapabilityType.BRIGHTNESS_CONTROL] = if (android.provider.Settings.System.canWrite(context)) {
             CapabilityStatus.AVAILABLE
         } else {
             CapabilityStatus.PERMISSION_REQUIRED
@@ -219,6 +265,7 @@ class CentralCapabilityRegistry(private val context: Context) {
         CapabilityType.USAGE_ACCESS -> "App Battery Drain Attribution"
         CapabilityType.BACKGROUND_MONITORING -> "24/7 Autonomous Background Service"
         CapabilityType.STORAGE_CACHE_OPERATIONS -> "Local Storage & Cache Manager"
+        CapabilityType.BRIGHTNESS_CONTROL -> "Adaptive Brightness & Thermal Control"
     }
 
     private fun checkBluetoothPermission(): Boolean {

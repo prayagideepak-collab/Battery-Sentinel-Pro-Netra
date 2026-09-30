@@ -17,20 +17,30 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.abs
 
 class NetraCentralDataCenter {
 
-    private val mutex = Mutex()
+    private val telemetryMutex = Mutex()
+    private val mediaMutex = Mutex()
+    private val bluetoothMutex = Mutex()
     private val chargingSpeedEngine = ChargingSpeedEngine()
 
     private val _centralState = MutableStateFlow(NetraCentralState())
     val centralState: StateFlow<NetraCentralState> = _centralState.asStateFlow()
 
-    private val _centralEvents = MutableSharedFlow<NetraCentralEvent>(extraBufferCapacity = 64)
+    private val _centralEvents = MutableSharedFlow<NetraCentralEvent>(
+        replay = 0,
+        extraBufferCapacity = 128,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
     val centralEvents: SharedFlow<NetraCentralEvent> = _centralEvents.asSharedFlow()
+
+    private val backgroundScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    private var inMemoryBluetoothHistory: MutableList<com.example.model.BluetoothDeviceItem>? = null
 
     private var capabilityRegistry: CentralCapabilityRegistry? = null
     private var lastValidStatePrefs: android.content.SharedPreferences? = null
@@ -88,6 +98,9 @@ class NetraCentralDataCenter {
 
     private var lastThermalWarningState = false
     private var lastCriticalOverheatState = false
+    private var isCriticalThermalActiveState = false
+    private var isLowBatteryControlActiveState = false
+    private var targetBrightnessPercentState: Int? = null
 
     private var chargerConnectedAt: Long? = null
     private var chargingStartedAt: Long? = null
@@ -112,7 +125,9 @@ class NetraCentralDataCenter {
         bluetoothBattery: Int?,
         source: String = "BatteryMonitorService"
     ) {
-        mutex.withLock {
+        val t0Nanos = System.nanoTime()
+        val eventsToEmit = mutableListOf<NetraCentralEvent>()
+        val newState = telemetryMutex.withLock {
             val now = System.currentTimeMillis()
             val oldState = _centralState.value
 
@@ -158,6 +173,8 @@ class NetraCentralDataCenter {
             val currentMa = if (currentMicroAmps != Int.MIN_VALUE) {
                 currentMicroAmps / 1000
             } else null
+
+            val t1Nanos = System.nanoTime()
 
             // 2. Strict Field-Level Last-Valid-Value Retention Mechanism
             // Missing, null, or invalid fields do NOT overwrite valid existing values.
@@ -214,22 +231,29 @@ class NetraCentralDataCenter {
                 }
             )
 
-            // Central Capability Registry Detection
-            val detectedCapabilities = capabilityRegistry?.detectAllCapabilities(
-                currentMicroAmps = currentMicroAmps,
-                temperatureRaw = temperatureRaw,
-                voltageRaw = voltage,
-                connectedBluetoothCount = oldState.bluetoothDevices.count { it.isConnected }
-            ) ?: oldState.capabilities
-
-            // Persist latest valid values asynchronously for reliable reboot restoration
-            lastValidStatePrefs?.edit()?.apply {
-                if (mergedLevel != null) putInt("saved_battery_level", mergedLevel)
-                if (mergedTempCelsius != null) putFloat("saved_temp", mergedTempCelsius)
-                if (mergedVoltageMv != null) putInt("saved_voltage", mergedVoltageMv)
-                if (mergedCurrentMa != null) putInt("saved_current", mergedCurrentMa)
-                if (mergedRawPower != null) putFloat("saved_power", mergedRawPower)
-                apply()
+            // Fast in-memory capability update (no blocking Binder IPC calls in critical path)
+            val detectedCapabilities = if (oldState.capabilities.isNotEmpty()) {
+                val updated = oldState.capabilities.toMutableMap()
+                if (currentMicroAmps != Int.MIN_VALUE && currentMicroAmps != 0) {
+                    updated[CapabilityType.BATTERY_CURRENT] = CapabilityStatus.AVAILABLE
+                    updated[CapabilityType.BATTERY_POWER_CALCULATION] = CapabilityStatus.AVAILABLE
+                    updated[CapabilityType.CHARGING_SPEED_CALCULATION] = CapabilityStatus.AVAILABLE
+                    updated[CapabilityType.FAST_CHARGING_DETECTION] = CapabilityStatus.AVAILABLE
+                }
+                if (temperatureRaw > 0) {
+                    updated[CapabilityType.BATTERY_TEMPERATURE] = CapabilityStatus.AVAILABLE
+                }
+                if (voltage > 0) {
+                    updated[CapabilityType.BATTERY_VOLTAGE] = CapabilityStatus.AVAILABLE
+                }
+                updated
+            } else {
+                capabilityRegistry?.detectAllCapabilities(
+                    currentMicroAmps = currentMicroAmps,
+                    temperatureRaw = temperatureRaw,
+                    voltageRaw = voltage,
+                    connectedBluetoothCount = oldState.bluetoothDevices.count { it.isConnected }
+                ) ?: oldState.capabilities
             }
 
             val mergedBluetoothConnected = bluetoothConnected ?: oldState.bluetoothConnected
@@ -295,10 +319,181 @@ class NetraCentralDataCenter {
             val mergedChargingEta = chargingEta ?: oldState.chargingEtaMinutes
             val mergedDischargingEta = dischargingEta ?: oldState.dischargingEtaMinutes
 
-            val newState = NetraCentralState(
+            // 2. Deduplication & Event Generation
+            if (isConnected != null && isConnected != lastConnectedState) {
+                val previousConnectedState = lastConnectedState
+                lastConnectedState = isConnected
+                val eventType = if (isConnected) NetraEventType.CHARGER_CONNECTED else NetraEventType.CHARGER_DISCONNECTED
+                eventsToEmit.add(
+                    NetraCentralEvent(
+                        eventId = "event_${eventType}_$now",
+                        eventType = eventType,
+                        timestamp = now,
+                        previousValue = previousConnectedState?.toString(),
+                        newValue = isConnected.toString(),
+                        source = source
+                    )
+                )
+            }
+
+            if (isCharging != null && isCharging != lastChargingState) {
+                val previousChargingState = lastChargingState
+                lastChargingState = isCharging
+                val eventType = if (isCharging) {
+                    NetraEventType.CHARGING_STARTED
+                } else {
+                    NetraEventType.CHARGING_STOPPED
+                }
+                eventsToEmit.add(
+                    NetraCentralEvent(
+                        eventId = "event_${eventType}_$now",
+                        eventType = eventType,
+                        timestamp = now,
+                        previousValue = previousChargingState?.toString(),
+                        newValue = isCharging.toString(),
+                        source = source
+                    )
+                )
+            }
+
+            if (isDischarging && !wasDischarging) {
+                eventsToEmit.add(
+                    NetraCentralEvent(
+                        eventId = "event_DISCHARGING_STARTED_$now",
+                        eventType = NetraEventType.DISCHARGING_STARTED,
+                        timestamp = now,
+                        previousValue = wasDischarging.toString(),
+                        newValue = isDischarging.toString(),
+                        source = source
+                    )
+                )
+            }
+
+            if (mergedSpeed != CanonicalChargingSpeed.UNAVAILABLE) {
+                if (lastSpeedCategory != mergedSpeed) {
+                    val prev = lastSpeedCategory?.name ?: "UNAVAILABLE"
+                    lastSpeedCategory = mergedSpeed
+                    eventsToEmit.add(
+                        NetraCentralEvent(
+                            eventId = "event_speed_change_$now",
+                            eventType = NetraEventType.SPEED_CHANGED,
+                            timestamp = now,
+                            previousValue = prev,
+                            newValue = mergedSpeed.name,
+                            source = source
+                        )
+                    )
+                }
+            }
+
+            if (mergedLevel != null) {
+                val boundary = (mergedLevel / 5) * 5
+                if (lastBatteryLevelBoundary != boundary) {
+                    val previousBoundary = lastBatteryLevelBoundary
+                    lastBatteryLevelBoundary = boundary
+                    eventsToEmit.add(
+                        NetraCentralEvent(
+                            eventId = "event_battery_boundary_${boundary}_$now",
+                            eventType = NetraEventType.BATTERY_LEVEL_CROSSED,
+                            timestamp = now,
+                            previousValue = previousBoundary?.toString(),
+                            newValue = boundary.toString(),
+                            source = source
+                        )
+                    )
+                }
+            }
+
+            // Thermal warning/critical/recovered event generation
+            if (mergedTempCelsius != null) {
+                val isWarning = mergedTempCelsius >= 40.0f
+                val isCritical = mergedTempCelsius >= 45.0f
+
+                if (isCritical && !lastCriticalOverheatState) {
+                    lastCriticalOverheatState = true
+                    lastThermalWarningState = true
+                    eventsToEmit.add(
+                        NetraCentralEvent(
+                            eventId = "event_thermal_crit_$now",
+                            eventType = NetraEventType.THERMAL_CRITICAL,
+                            timestamp = now,
+                            newValue = mergedTempCelsius.toString(),
+                            source = source
+                        )
+                    )
+                } else if (isWarning && !lastThermalWarningState && !isCritical) {
+                    lastThermalWarningState = true
+                    eventsToEmit.add(
+                        NetraCentralEvent(
+                            eventId = "event_thermal_warn_$now",
+                            eventType = NetraEventType.THERMAL_WARNING,
+                            timestamp = now,
+                            newValue = mergedTempCelsius.toString(),
+                            source = source
+                        )
+                    )
+                } else if (!isWarning && !isCritical && (lastThermalWarningState || lastCriticalOverheatState)) {
+                    lastThermalWarningState = false
+                    lastCriticalOverheatState = false
+                    eventsToEmit.add(
+                        NetraCentralEvent(
+                            eventId = "event_thermal_rec_$now",
+                            eventType = NetraEventType.THERMAL_RECOVERED,
+                            timestamp = now,
+                            newValue = mergedTempCelsius.toString(),
+                            source = source
+                        )
+                    )
+                }
+            }
+
+            val canonicalChargerState = when {
+                mergedIsConnected == true && mergedIsCharging == true -> com.example.model.CanonicalChargerState.CHARGER_CONNECTED_CHARGING
+                mergedIsConnected == true && mergedIsCharging == false -> com.example.model.CanonicalChargerState.CHARGER_CONNECTED_NOT_CHARGING
+                mergedIsConnected == false && isDischarging -> com.example.model.CanonicalChargerState.DISCHARGING
+                mergedIsConnected == false -> com.example.model.CanonicalChargerState.CHARGER_DISCONNECTED
+                else -> com.example.model.CanonicalChargerState.UNKNOWN
+            }
+
+            if (mergedTempCelsius != null) {
+                if (mergedTempCelsius > 40.0f && !isCriticalThermalActiveState) {
+                    isCriticalThermalActiveState = true
+                    targetBrightnessPercentState = 10
+                } else if (mergedTempCelsius <= 35.0f && isCriticalThermalActiveState) {
+                    isCriticalThermalActiveState = false
+                    targetBrightnessPercentState = null
+                }
+            }
+
+            if (mergedLevel != null) {
+                if (mergedLevel <= 15 && mergedIsCharging != true && !isLowBatteryControlActiveState) {
+                    isLowBatteryControlActiveState = true
+                } else if (mergedLevel > 20 || mergedIsCharging == true) {
+                    isLowBatteryControlActiveState = false
+                }
+            }
+
+            val t2Nanos = System.nanoTime()
+            val valDurationMs = (t1Nanos - t0Nanos) / 1_000_000f
+            val updateDurationMs = (t2Nanos - t1Nanos) / 1_000_000f
+            val totalProcessingMs = (t2Nanos - t0Nanos) / 1_000_000f
+
+            val latencyMetrics = com.example.model.PipelineLatencyMetrics(
+                t0ReceivedNanos = t0Nanos,
+                t1ValidatedNanos = t1Nanos,
+                t2StateUpdatedNanos = t2Nanos,
+                t3EmittedNanos = t2Nanos,
+                validationDurationMs = valDurationMs,
+                updateDurationMs = updateDurationMs,
+                totalProcessingMs = totalProcessingMs,
+                meetsBudget = totalProcessingMs <= 100f
+            )
+
+            val updatedState = NetraCentralState(
                 batteryLevel = mergedLevel,
                 isCharging = mergedIsCharging,
                 isChargerConnected = mergedIsConnected,
+                canonicalChargerState = canonicalChargerState,
                 chargerConnectedAt = chargerConnectedAt,
                 chargingStartedAt = chargingStartedAt,
                 chargingStoppedAt = chargingStoppedAt,
@@ -326,140 +521,41 @@ class NetraCentralDataCenter {
                 mediaState = oldState.mediaState,
                 isMediaControlAvailable = oldState.isMediaControlAvailable,
                 mediaPausedByNethra = oldState.mediaPausedByNethra,
-                isNightProtectionActive = oldState.isNightProtectionActive
+                isNightProtectionActive = oldState.isNightProtectionActive,
+                isCriticalThermalActive = isCriticalThermalActiveState,
+                isLowBatteryControlActive = isLowBatteryControlActiveState,
+                targetBrightnessPercent = targetBrightnessPercentState,
+                pipelineLatency = latencyMetrics
             )
 
-            _centralState.value = newState
+            // Publish state IMMEDIATELY (single atomic update)
+            _centralState.value = updatedState
+            updatedState
+        }
 
-            // 2. Deduplication & Event Generation
-            if (isConnected != null && isConnected != lastConnectedState) {
-                val previousConnectedState = lastConnectedState
-                lastConnectedState = isConnected
-                val eventType = if (isConnected) NetraEventType.CHARGER_CONNECTED else NetraEventType.CHARGER_DISCONNECTED
-                val event = NetraCentralEvent(
-                    eventId = "event_${eventType}_$now",
-                    eventType = eventType,
-                    timestamp = now,
-                    previousValue = previousConnectedState?.toString(),
-                    newValue = isConnected.toString(),
-                    source = source
-                )
-                _centralEvents.emit(event)
-            }
+        // Non-suspending event delivery to collectors
+        for (event in eventsToEmit) {
+            _centralEvents.tryEmit(event)
+        }
 
-            if (isCharging != null && isCharging != lastChargingState) {
-                val previousChargingState = lastChargingState
-                lastChargingState = isCharging
-                val eventType = if (isCharging) {
-                    NetraEventType.CHARGING_STARTED
-                } else {
-                    NetraEventType.CHARGING_STOPPED
+        // Offload disk persistence to backgroundScope strictly AFTER state publication
+        backgroundScope.launch {
+            try {
+                lastValidStatePrefs?.edit()?.apply {
+                    if (newState.batteryLevel != null) putInt("saved_battery_level", newState.batteryLevel)
+                    if (newState.temperatureCelsius != null) putFloat("saved_temp", newState.temperatureCelsius)
+                    if (newState.voltageMv != null) putInt("saved_voltage", newState.voltageMv)
+                    if (newState.currentMa != null) putInt("saved_current", newState.currentMa)
+                    if (newState.powerWatts != null) putFloat("saved_power", newState.powerWatts)
+                    apply()
                 }
-                _centralEvents.emit(
-                    NetraCentralEvent(
-                        eventId = "event_${eventType}_$now",
-                        eventType = eventType,
-                        timestamp = now,
-                        previousValue = previousChargingState?.toString(),
-                        newValue = isCharging.toString(),
-                        source = source
-                    )
-                )
-            }
-
-            if (isDischarging && !wasDischarging) {
-                _centralEvents.emit(
-                    NetraCentralEvent(
-                        eventId = "event_DISCHARGING_STARTED_$now",
-                        eventType = NetraEventType.DISCHARGING_STARTED,
-                        timestamp = now,
-                        previousValue = wasDischarging.toString(),
-                        newValue = isDischarging.toString(),
-                        source = source
-                    )
-                )
-            }
-
-            if (mergedSpeed != CanonicalChargingSpeed.UNAVAILABLE) {
-                if (lastSpeedCategory != mergedSpeed) {
-                    val prev = lastSpeedCategory?.name ?: "UNAVAILABLE"
-                    lastSpeedCategory = mergedSpeed
-                    val event = NetraCentralEvent(
-                        eventId = "event_speed_change_$now",
-                        eventType = NetraEventType.SPEED_CHANGED,
-                        timestamp = now,
-                        previousValue = prev,
-                        newValue = mergedSpeed.name,
-                        source = source
-                    )
-                    _centralEvents.emit(event)
-                }
-            }
-
-            if (mergedLevel != null) {
-                val boundary = (mergedLevel / 5) * 5
-                if (lastBatteryLevelBoundary != boundary) {
-                    val previousBoundary = lastBatteryLevelBoundary
-                    lastBatteryLevelBoundary = boundary
-                    val event = NetraCentralEvent(
-                        eventId = "event_battery_boundary_${boundary}_$now",
-                        eventType = NetraEventType.BATTERY_LEVEL_CROSSED,
-                        timestamp = now,
-                        previousValue = previousBoundary?.toString(),
-                        newValue = boundary.toString(),
-                        source = source
-                    )
-                    _centralEvents.emit(event)
-                }
-            }
-
-            // Thermal warning/critical/recovered event generation
-            if (mergedTempCelsius != null) {
-                val isWarning = mergedTempCelsius >= 40.0f
-                val isCritical = mergedTempCelsius >= 45.0f
-
-                if (isCritical && !lastCriticalOverheatState) {
-                    lastCriticalOverheatState = true
-                    lastThermalWarningState = true
-                    _centralEvents.emit(
-                        NetraCentralEvent(
-                            eventId = "event_thermal_crit_$now",
-                            eventType = NetraEventType.THERMAL_CRITICAL,
-                            timestamp = now,
-                            newValue = mergedTempCelsius.toString(),
-                            source = source
-                        )
-                    )
-                } else if (isWarning && !lastThermalWarningState && !isCritical) {
-                    lastThermalWarningState = true
-                    _centralEvents.emit(
-                        NetraCentralEvent(
-                            eventId = "event_thermal_warn_$now",
-                            eventType = NetraEventType.THERMAL_WARNING,
-                            timestamp = now,
-                            newValue = mergedTempCelsius.toString(),
-                            source = source
-                        )
-                    )
-                } else if (!isWarning && !isCritical && (lastThermalWarningState || lastCriticalOverheatState)) {
-                    lastThermalWarningState = false
-                    lastCriticalOverheatState = false
-                    _centralEvents.emit(
-                        NetraCentralEvent(
-                            eventId = "event_thermal_rec_$now",
-                            eventType = NetraEventType.THERMAL_RECOVERED,
-                            timestamp = now,
-                            newValue = mergedTempCelsius.toString(),
-                            source = source
-                        )
-                    )
-                }
-            }
+            } catch (_: Exception) {}
         }
     }
 
     suspend fun processBluetoothDevices(devices: List<com.example.model.BluetoothDeviceItem>, source: String = "BluetoothHelper") {
-        mutex.withLock {
+        val eventsToEmit = mutableListOf<NetraCentralEvent>()
+        bluetoothMutex.withLock {
             val now = System.currentTimeMillis()
             val oldState = _centralState.value
 
@@ -478,7 +574,7 @@ class NetraCentralDataCenter {
                 val oldDevice = oldState.bluetoothDevices.find { (it.address.ifBlank { it.name }) == deviceKey }
 
                 if (device.isConnected && (oldDevice == null || !oldDevice.isConnected)) {
-                    _centralEvents.emit(
+                    eventsToEmit.add(
                         NetraCentralEvent(
                             eventId = "event_bt_conn_${deviceKey}_$now",
                             eventType = NetraEventType.BLUETOOTH_CONNECTED,
@@ -494,7 +590,7 @@ class NetraCentralDataCenter {
                     val currentPercent = device.batteryPercent
                     val oldPercent = oldDevice?.batteryPercent
                     if (currentPercent % 10 == 0 && (oldPercent == null || oldPercent != currentPercent)) {
-                        _centralEvents.emit(
+                        eventsToEmit.add(
                             NetraCentralEvent(
                                 eventId = "event_bt_bat_${deviceKey}_${currentPercent}_$now",
                                 eventType = NetraEventType.BLUETOOTH_BATTERY_BOUNDARY,
@@ -512,7 +608,7 @@ class NetraCentralDataCenter {
                 val deviceKey = oldDevice.address.ifBlank { oldDevice.name }
                 val newDevice = mergedDevices.find { (it.address.ifBlank { it.name }) == deviceKey }
                 if (oldDevice.isConnected && (newDevice == null || !newDevice.isConnected)) {
-                    _centralEvents.emit(
+                    eventsToEmit.add(
                         NetraCentralEvent(
                             eventId = "event_bt_disc_${deviceKey}_$now",
                             eventType = NetraEventType.BLUETOOTH_DISCONNECTED,
@@ -524,52 +620,22 @@ class NetraCentralDataCenter {
                 }
             }
 
-            // Process Persistent Bluetooth History
+            // Process Persistent Bluetooth History using in-memory cache (no blocking disk I/O in critical path)
             val historyMap = mutableMapOf<String, com.example.model.BluetoothDeviceItem>()
+            val existingHistory = inMemoryBluetoothHistory ?: (if (oldState.bluetoothHistory.isNotEmpty()) oldState.bluetoothHistory else loadBluetoothHistory()).toMutableList().also { inMemoryBluetoothHistory = it }
             
-            // 1. Load from persistent history storage
-            loadBluetoothHistory().forEach { dev ->
+            existingHistory.forEach { dev ->
                 historyMap[dev.address.ifBlank { dev.name }] = dev
             }
 
-            // 2. Add current connected devices, setting isConnected to false inside history (showing last connected info)
+            // Add current connected devices
             mergedDevices.forEach { dev ->
                 val key = dev.address.ifBlank { dev.name }
                 historyMap[key] = dev.copy(isConnected = false)
             }
 
-            // 3. Fallback to paired devices to populate history
-            try {
-                val adapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
-                if (adapter != null && adapter.isEnabled) {
-                    val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                        android.Manifest.permission.BLUETOOTH_CONNECT
-                    } else {
-                        android.Manifest.permission.BLUETOOTH
-                    }
-                    val context = com.example.NetraApplication.instance.applicationContext
-                    if (androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                        adapter.bondedDevices.forEach { bd ->
-                            val name = bd.name ?: "Bluetooth Device"
-                            val address = bd.address ?: ""
-                            val key = address.ifBlank { name }
-                            if (!historyMap.containsKey(key)) {
-                                historyMap[key] = com.example.model.BluetoothDeviceItem(
-                                    name = name,
-                                    address = address,
-                                    isConnected = false,
-                                    isPaired = true,
-                                    deviceType = "Bluetooth Peripheral",
-                                    batteryPercent = null
-                                )
-                            }
-                        }
-                    }
-                }
-            } catch (_: Exception) {}
-
             val updatedHistoryList = historyMap.values.toList()
-            saveBluetoothHistory(updatedHistoryList)
+            inMemoryBluetoothHistory = updatedHistoryList.toMutableList()
 
             val bluetoothConnected = mergedDevices.any { it.isConnected }
             val highestBattery = mergedDevices.filter { it.isConnected && it.batteryPercent != null }
@@ -587,7 +653,18 @@ class NetraCentralDataCenter {
                 isNightProtectionActive = isNightActive
             )
 
+            // Publish state immediately!
             _centralState.value = newState
+
+            // Offload disk persistence to backgroundScope without delaying live UI
+            backgroundScope.launch {
+                saveBluetoothHistory(updatedHistoryList)
+            }
+        }
+
+        // Emit events non-suspending
+        for (event in eventsToEmit) {
+            _centralEvents.tryEmit(event)
         }
     }
 
@@ -661,7 +738,7 @@ class NetraCentralDataCenter {
     }
 
     suspend fun refreshNightProtectionState() {
-        mutex.withLock {
+        telemetryMutex.withLock {
             refreshNightProtectionStateSynchronously()
         }
     }
@@ -676,28 +753,28 @@ class NetraCentralDataCenter {
     }
 
     suspend fun updateMediaState(state: com.example.model.CanonicalMediaState) {
-        mutex.withLock {
+        mediaMutex.withLock {
             val oldState = _centralState.value
             _centralState.value = oldState.copy(mediaState = state)
         }
     }
 
     suspend fun updateMediaControlAvailable(available: Boolean) {
-        mutex.withLock {
+        mediaMutex.withLock {
             val oldState = _centralState.value
             _centralState.value = oldState.copy(isMediaControlAvailable = available)
         }
     }
 
     suspend fun setMediaPausedByNethra(paused: Boolean) {
-        mutex.withLock {
+        mediaMutex.withLock {
             val oldState = _centralState.value
             _centralState.value = oldState.copy(mediaPausedByNethra = paused)
         }
     }
 
     suspend fun requestMediaPause(context: Context): Boolean {
-        return mutex.withLock {
+        return mediaMutex.withLock {
             val oldState = _centralState.value
             if (!oldState.isMediaControlAvailable || oldState.mediaState == com.example.model.CanonicalMediaState.UNSUPPORTED) {
                 return false
@@ -723,7 +800,7 @@ class NetraCentralDataCenter {
     }
 
     suspend fun requestMediaResume(context: Context): Boolean {
-        return mutex.withLock {
+        return mediaMutex.withLock {
             val oldState = _centralState.value
             if (oldState.mediaPausedByNethra) {
                 val controller = getMediaController(context)

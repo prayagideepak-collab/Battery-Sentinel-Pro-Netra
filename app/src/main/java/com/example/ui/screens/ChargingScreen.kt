@@ -64,10 +64,10 @@ fun ChargingScreen(
     val sessions by viewModel.recentChargingSessions.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    if (!telemetry.isDataAvailable || !canonicalReading.hasCompleteLegacyReading()) {
+    if (canonicalReading.batteryLevel == null && !telemetry.isDataAvailable) {
         Column(modifier = modifier.fillMaxSize().padding(24.dp)) {
-            Text("Battery telemetry unavailable", color = MaterialTheme.colorScheme.onSurface)
-            Text("Waiting for a complete device reading. No estimate is shown.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Connecting to Central Sentinel...", color = MaterialTheme.colorScheme.onSurface)
+            Text("Waiting for battery sensor data.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }

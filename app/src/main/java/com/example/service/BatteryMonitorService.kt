@@ -41,8 +41,8 @@ import kotlinx.coroutines.launch
 class BatteryMonitorService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    // One consumer keeps broadcasts in order while the canonical reducer suspends.
-    private val batteryInputs = Channel<Intent>(Channel.UNLIMITED)
+    // Conflated channel prevents queuing lag, delivering freshest broadcast immediately
+    private val batteryInputs = Channel<Intent>(Channel.CONFLATED)
     private lateinit var lifecyclePolling: LifecycleAwarePolling
     private var isReceiverRegistered = false
     private var lastTemp: Float = 0f
@@ -193,29 +193,9 @@ class BatteryMonitorService : Service() {
             bluetoothConnected = null, bluetoothBattery = null
         )
         val canonical = center.centralState.value
-        updateForegroundNotification(canonical)
-        checkSafetyAlerts(canonical)
 
-        // The legacy non-null model cannot encode missing fields yet. Do not publish
-        // a guessed sample into its UI, announcements, or non-null Room columns.
-        if (!canonical.hasCompleteLegacyReading()) {
-            val unavailable = BatteryTelemetry(
-                isServiceConnected = true,
-                lastUpdateTimestamp = canonical.lastUpdateTimestamp
-            )
-            _liveTelemetryFlow.value = unavailable
-            try {
-                com.example.widget.NetraBatteryWidgetProvider.updateAllWidgets(this, unavailable)
-                com.example.widget.NetraDegradationSparklineWidgetProvider.updateAllWidgets(this)
-            } catch (e: Exception) {
-                Log.w("BatteryMonitorService", "Widget refresh failed", e)
-            }
-            return
-        }
-
-        val batteryPct = requireNotNull(canonical.batteryLevel)
-
-        val isCharging = requireNotNull(canonical.isCharging)
+        val batteryPct = canonical.batteryLevel ?: _liveTelemetryFlow.value.level
+        val isCharging = canonical.isCharging ?: _liveTelemetryFlow.value.isCharging
 
         val pluggedType = when (canonical.pluggedType) {
             com.example.model.CanonicalPluggedType.AC -> "AC"
@@ -225,9 +205,8 @@ class BatteryMonitorService : Service() {
             else -> "UNKNOWN"
         }
 
-        val tempCelsius = requireNotNull(canonical.temperatureCelsius)
-
-        val voltageMv = requireNotNull(canonical.voltageMv)
+        val tempCelsius = canonical.temperatureCelsius ?: _liveTelemetryFlow.value.temperature
+        val voltageMv = canonical.voltageMv ?: _liveTelemetryFlow.value.voltageMv
         val healthInt = intent.getIntExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_UNKNOWN)
         val healthString = when (healthInt) {
             BatteryManager.BATTERY_HEALTH_GOOD -> "Good"
@@ -235,12 +214,12 @@ class BatteryMonitorService : Service() {
             BatteryManager.BATTERY_HEALTH_DEAD -> "Dead"
             BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> "Over Voltage"
             BatteryManager.BATTERY_HEALTH_COLD -> "Cold"
-            else -> "Unavailable"
+            else -> if (_liveTelemetryFlow.value.healthString != "Unavailable") _liveTelemetryFlow.value.healthString else "Unavailable"
         }
-        val technology = intent.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: "Unavailable"
+        val technology = intent.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: _liveTelemetryFlow.value.technology
 
-        val currentMa = requireNotNull(canonical.currentMa)
-        val powerWatts = requireNotNull(canonical.powerWatts)
+        val currentMa = canonical.currentMa ?: _liveTelemetryFlow.value.currentMa
+        val powerWatts = canonical.powerWatts ?: _liveTelemetryFlow.value.powerWatts
         val (chargingSpeed, speedLabel) = when (canonical.chargingSpeed) {
             CanonicalChargingSpeed.SLOW -> ChargerSpeed.SLOW to "Slow charging"
             CanonicalChargingSpeed.NORMAL -> ChargerSpeed.STANDARD to "Normal charging"
@@ -258,8 +237,10 @@ class BatteryMonitorService : Service() {
                 thermalVelocity = (tempCelsius - lastTemp) / deltaMinutes
             }
         }
-        lastTemp = tempCelsius
-        lastTempTimestamp = now
+        if (tempCelsius > 0) {
+            lastTemp = tempCelsius
+            lastTempTimestamp = now
+        }
 
         val distanceTo40C = 40.0f - tempCelsius
         val predictedThrottlingMinutes = if (thermalVelocity > 0.2f && distanceTo40C > 0) {
@@ -280,10 +261,6 @@ class BatteryMonitorService : Service() {
             else -> DotState.CONNECTED
         }
 
-        // Android battery-health status does not reveal capacity health or a numeric score.
-        val healthScore: Int? = null
-        val healthGrade = "Unavailable"
-
         val telemetry = BatteryTelemetry(
             level = batteryPct,
             isCharging = isCharging,
@@ -298,68 +275,70 @@ class BatteryMonitorService : Service() {
             chargingSpeedLabel = speedLabel,
             timeToFullMinutes = timeToFullMinutes,
             estimatedDischargeHours = estimatedDischargeHours,
-            observedDischargeRatePerHour = 0f, // historical rate not yet available in this legacy model
+            observedDischargeRatePerHour = 0f,
             distanceTo40C = distanceTo40C,
             thermalVelocity = thermalVelocity,
             predictedThrottlingMinutes = predictedThrottlingMinutes,
-            healthScore = healthScore,
-            healthGrade = healthGrade,
+            healthScore = null,
+            healthGrade = "Unavailable",
             isOverheated = isOverheat,
             isCriticalOverheat = isCritical,
             serviceDotState = dotState,
             isServiceConnected = true,
-            isDataAvailable = true,
+            isDataAvailable = canonical.batteryLevel != null,
             isPowerSaverActive = lifecyclePolling.isPowerSaveMode(),
             isScreenOn = lifecyclePolling.isScreenInteractive(),
             lastUpdateTimestamp = now
         )
 
+        // Publish live telemetry immediately!
         _liveTelemetryFlow.value = telemetry
 
-        // Update Home Screen Widget
-        try {
-            com.example.widget.NetraBatteryWidgetProvider.updateAllWidgets(this, telemetry)
-        } catch (_: Exception) {}
+        // Offload ALL secondary background work (notifications, safety alerts, widgets, DB)
+        serviceScope.launch(Dispatchers.Default) {
+            try {
+                updateForegroundNotification(canonical)
+                checkSafetyAlerts(canonical)
+            } catch (_: Exception) {}
+        }
 
-        // Evaluate Calibration progression
-        try {
-            NetraApplication.instance.calibrationManager.onTelemetryUpdate(telemetry)
-        } catch (_: Exception) {}
+        // Offload ALL secondary background work (widgets, calibration, power profile, sentinel, cache, Room DB)
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                com.example.widget.NetraBatteryWidgetProvider.updateAllWidgets(this@BatteryMonitorService, telemetry)
+            } catch (_: Exception) {}
 
-        // Evaluate Dynamic Power Profile adjustments
-        try {
-            NetraApplication.instance.powerProfileManager.onTelemetryUpdate(telemetry)
-        } catch (_: Exception) {}
+            try {
+                NetraApplication.instance.calibrationManager.onTelemetryUpdate(telemetry)
+            } catch (_: Exception) {}
 
-        // Voice Announcements are managed autonomously by collecting central events inside AnnouncementEngine
+            try {
+                NetraApplication.instance.powerProfileManager.onTelemetryUpdate(telemetry)
+            } catch (_: Exception) {}
 
-        // Evaluate Telemetry & Runtime Sentinel health supervision
-        try {
-            NetraApplication.instance.telemetrySentinel.onTelemetryReceived(telemetry)
-        } catch (_: Exception) {}
+            try {
+                NetraApplication.instance.telemetrySentinel.onTelemetryReceived(telemetry)
+            } catch (_: Exception) {}
 
-        // Evaluate Storage Cache safety threshold asynchronously
-        try {
-            serviceScope.launch {
+            try {
                 NetraApplication.instance.storageCacheManager.autoCleanIfAppropriate(isCharging)
-            }
-        } catch (_: Exception) {}
+            } catch (_: Exception) {}
 
-        // Persist to Room DB with intelligent debouncing
-        serviceScope.launch {
-            val record = BatteryRecord(
-                timestamp = now,
-                level = batteryPct,
-                temperature = tempCelsius,
-                voltageMv = voltageMv,
-                currentMa = currentMa,
-                powerWatts = powerWatts,
-                isCharging = isCharging,
-                pluggedType = pluggedType,
-                healthStatus = healthString,
-                screenOn = lifecyclePolling.isScreenInteractive()
-            )
-            NetraApplication.instance.batteryRepository.recordTelemetryDebounced(record)
+            try {
+                val record = BatteryRecord(
+                    timestamp = now,
+                    level = batteryPct,
+                    temperature = tempCelsius,
+                    voltageMv = voltageMv,
+                    currentMa = currentMa,
+                    powerWatts = powerWatts,
+                    isCharging = isCharging,
+                    pluggedType = pluggedType,
+                    healthStatus = healthString,
+                    screenOn = lifecyclePolling.isScreenInteractive()
+                )
+                NetraApplication.instance.batteryRepository.recordTelemetryDebounced(record)
+            } catch (_: Exception) {}
         }
     }
 
@@ -579,7 +558,21 @@ class BatteryMonitorService : Service() {
         val title: String
         val lines = mutableListOf<String>()
 
-        if (t.isCharging == true) {
+        if (t.isCriticalThermalActive) {
+            lines.add("⚠️ Critical Thermal Control Active")
+        }
+        if (t.isLowBatteryControlActive) {
+            lines.add("🔋 Low Battery Control Active")
+        }
+
+        if (t.canonicalChargerState == com.example.model.CanonicalChargerState.CHARGER_CONNECTED_NOT_CHARGING) {
+            title = "Charger connected • Charging stopped • $levelStr"
+            t.chargerConnectedAt?.let { at ->
+                val mins = ((now - at).coerceAtLeast(0L) / 60_000L)
+                lines.add(if (mins >= 60) "Connected ${mins / 60}h ${mins % 60}m" else "Connected $mins min")
+            }
+            tempStr?.let { lines.add(it) }
+        } else if (t.isCharging == true) {
             title = "Charging • $levelStr"
             if (speedDisplay.isNotEmpty()) {
                 lines.add(speedDisplay)

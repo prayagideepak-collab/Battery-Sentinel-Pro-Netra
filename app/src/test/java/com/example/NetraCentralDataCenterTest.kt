@@ -435,4 +435,43 @@ class NetraCentralDataCenterTest {
         val state = dataCenter.centralState.value
         assertEquals(0, state.currentMa)
     }
+
+    @Test
+    fun `test exact charging speed boundaries with raw incoming power`() = runTest(testDispatcher) {
+        // 0.5W -> Slow (< 5W)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 125000, null, null)
+        assertEquals(CanonicalChargingSpeed.SLOW, dataCenter.centralState.value.chargingSpeed)
+
+        // 4.9W -> Slow (< 5W)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 1225000, null, null)
+        assertEquals(CanonicalChargingSpeed.SLOW, dataCenter.centralState.value.chargingSpeed)
+
+        // 5.0W -> Normal (>= 5W, < 10W)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 1250000, null, null)
+        assertEquals(CanonicalChargingSpeed.NORMAL, dataCenter.centralState.value.chargingSpeed)
+
+        // 9.9W -> Normal
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 2475000, null, null)
+        assertEquals(CanonicalChargingSpeed.NORMAL, dataCenter.centralState.value.chargingSpeed)
+
+        // 10.0W -> Fast (>= 10W, <= 20W)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 2500000, null, null)
+        assertEquals(CanonicalChargingSpeed.FAST, dataCenter.centralState.value.chargingSpeed)
+
+        // 20.0W -> Fast
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 5000000, null, null)
+        assertEquals(CanonicalChargingSpeed.FAST, dataCenter.centralState.value.chargingSpeed)
+
+        // 25.0W -> Ultra Fast (> 20W)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 6250000, null, null)
+        assertEquals(CanonicalChargingSpeed.ULTRA_FAST, dataCenter.centralState.value.chargingSpeed)
+    }
+
+    @Test
+    fun `test charger connected but not charging state and speed unavailable`() = runTest(testDispatcher) {
+        dataCenter.processRawInput(80, 100, android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 0, null, null)
+        val state = dataCenter.centralState.value
+        assertEquals(com.example.model.CanonicalChargerState.CHARGER_CONNECTED_NOT_CHARGING, state.canonicalChargerState)
+        assertEquals(CanonicalChargingSpeed.UNAVAILABLE, state.chargingSpeed)
+    }
 }

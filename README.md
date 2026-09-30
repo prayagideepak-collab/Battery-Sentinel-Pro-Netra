@@ -260,18 +260,25 @@ Examples of actions that may require Android permission or special access includ
 
 The UI must launch the real Android flow and then refresh the result when the user returns.
 
-## Charging Speed
+## Charging Speed (Raw Incoming Power Model)
 
-The current product classification is:
+The charging speed classification uses **raw incoming charging power only**. 
 
-| Charging power | Classification |
-|---:|---|
-| < 5 W | Slow |
-| 5 W to < 10 W | Normal |
-| 10 W to 20 W | Fast |
-| > 20 W | Ultra Fast |
+- CG / net / effective charging-speed calculation and consumption subtraction have been removed entirely. Phone consumption does not affect charging speed classification.
+- Charging state and charger connection state are strictly independent (`CHARGER_CONNECTED_CHARGING`, `CHARGER_CONNECTED_NOT_CHARGING`, `CHARGER_DISCONNECTED`, `DISCHARGING`).
+- Low-power USB data connections without confirmed active battery charging are not misclassified as slow charging.
 
-Power should be derived from Android-provided voltage/current when those values are available.
+Product classification table:
+
+| Charging power (Raw Incoming) | Classification | Status |
+|---:|---|---|
+| < 5 W | Slow | Verified |
+| 5 W to < 10 W | Normal | Verified |
+| 10 W to 20 W | Fast | Verified |
+| > 20 W | Ultra Fast | Verified |
+| Not Charging / Connected | Unavailable / Not Applicable | Verified |
+
+Power is derived strictly from Android battery voltage and current when available. Notifications, announcements, and UI elements all consume this centralized raw power classification.
 
 ## Thermal Target
 

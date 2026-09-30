@@ -39,6 +39,7 @@ class ChargingSpeedEngine {
         }
 
         // Exact thresholds: <5W = Slow, >=5W and <10W = Normal, >=10W and <=20W = Fast, >20W = Ultra Fast
+        // RAW INCOMING POWER ONLY. Consumption / net power does NOT affect charging speed classification.
         val speedCategory = if (isCharging == true && rawPowerWatts != null) {
             when {
                 rawPowerWatts > 20.0f -> CanonicalChargingSpeed.ULTRA_FAST
@@ -50,16 +51,7 @@ class ChargingSpeedEngine {
             CanonicalChargingSpeed.UNAVAILABLE
         }
 
-        val announcementCategory = if (isCharging == true && netPowerWatts != null && netPowerWatts > 0f) {
-            when {
-                netPowerWatts > 20.0f -> CanonicalChargingSpeed.ULTRA_FAST
-                netPowerWatts >= 10.0f -> CanonicalChargingSpeed.FAST
-                netPowerWatts >= 5.0f -> CanonicalChargingSpeed.NORMAL
-                else -> CanonicalChargingSpeed.SLOW
-            }
-        } else {
-            CanonicalChargingSpeed.UNAVAILABLE
-        }
+        val announcementCategory = speedCategory
 
         return SpeedEngineResult(
             rawPowerWatts = rawPowerWatts,
