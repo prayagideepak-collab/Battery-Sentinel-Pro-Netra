@@ -29,7 +29,7 @@ enum class CanonicalChargingSpeed {
     val tierRange: String
         get() = when (this) {
             SLOW -> "< 5W"
-            NORMAL -> "5W–10W"
+            NORMAL -> "5W–<10W"
             FAST -> "10W–<20W"
             SUPER_FAST -> "20W–<40W"
             ULTRA_FAST -> "≥ 40W"
@@ -39,7 +39,7 @@ enum class CanonicalChargingSpeed {
     val fullLabelWithTier: String
         get() = when (this) {
             SLOW -> "Slow (<5W)"
-            NORMAL -> "Normal (5W–10W)"
+            NORMAL -> "Normal (5W–<10W)"
             FAST -> "Fast (10W–<20W)"
             SUPER_FAST -> "Super Fast (20W–<40W)"
             ULTRA_FAST -> "Ultra Fast (≥40W)"
@@ -126,7 +126,7 @@ data class NetraCentralState(
     val netPowerWatts: Float? = null, // Net effective power (Raw incoming - consumption)
     val consumptionPowerWatts: Float? = null, // Phone consumption power
     val chargingSpeed: CanonicalChargingSpeed = CanonicalChargingSpeed.UNAVAILABLE, // Based on raw power
-    val announcementSpeed: CanonicalChargingSpeed = CanonicalChargingSpeed.UNAVAILABLE, // Based on net effective power
+    val announcementSpeed: CanonicalChargingSpeed = CanonicalChargingSpeed.UNAVAILABLE, // Based on the same raw incoming power classification as chargingSpeed
     val bluetoothConnected: Boolean? = null,
     val bluetoothBatteryPercent: Int? = null,
     val bluetoothDevices: List<BluetoothDeviceItem> = emptyList(),
