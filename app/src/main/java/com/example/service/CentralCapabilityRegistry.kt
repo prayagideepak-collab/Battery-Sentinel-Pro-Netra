@@ -92,7 +92,7 @@ class CentralCapabilityRegistry(private val context: Context) {
         map[CapabilityType.BATTERY_VOLTAGE] = if (voltageRaw > 0) {
             CapabilityStatus.AVAILABLE
         } else {
-            CapabilityStatus.AVAILABLE
+            CapabilityStatus.UNAVAILABLE
         }
 
         // 4. Battery Current (OEM restricted on certain hardware)
