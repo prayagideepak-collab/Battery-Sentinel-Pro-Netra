@@ -76,7 +76,7 @@ class AnnouncementEngineTest {
         assertEquals("SLOW", engine.categorizePowerSpeed(3.2f))
         assertEquals("NORMAL", engine.categorizePowerSpeed(7.5f))
         assertEquals("FAST", engine.categorizePowerSpeed(15.0f))
-        assertEquals("ULTRA_FAST", engine.categorizePowerSpeed(28.0f))
+        assertEquals("SUPER_FAST", engine.categorizePowerSpeed(28.0f))
     }
 
     @Test
