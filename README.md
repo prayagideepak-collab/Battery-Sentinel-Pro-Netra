@@ -457,8 +457,51 @@ Use this section to keep a concise chronological record of verified product chan
 | 2026-09-29 | Zero-based product/UI specification established for the Nethra rebuild | In Development |
 | 2026-09-29 | README maintenance and feature-verification policy established | Verified |
 | 2026-09-29 | Central battery state/event normalization hardened; five-tab navigation and connected-only Bluetooth foundation updated | In Development |
+| 2026-09-30 | Part 13: Five-tab screen consolidation & canonical data surfacing | Verified |
+| 2026-09-30 | Part 14: Storage, Cache consolidation & Central Capability Registry | Verified |
 
 Future entries must be added when the corresponding product change is verified. Do not mark a feature **Verified** until the implementation and required checks have actually confirmed it.
+
+## Storage, Cache & Central Capability Registry (Part 14)
+
+### 1. Storage Responsibility & Strict Domain Segregation
+Storage is segregated into distinct, non-competing domains under the sole authority of the Central Unit:
+- **Live Telemetry State**: Held exclusively in `NetraCentralDataCenter` memory via Kotlin `StateFlow`.
+- **Last-Valid State**: Persisted in `netra_last_valid_state_prefs` to enable instant recovery on process recreation or reboot. When restored, fields are strictly labeled `FieldStatus.LAST_VALID` and `isDataFresh = false`. It never competes with fresh incoming telemetry.
+- **User Settings**: Persisted through `SettingsRepository` in `netra_sentinel_prefs`.
+- **History & Analytics**: Persisted locally using Room Database (`NetraDatabase`: `battery_records`, `charging_sessions`).
+- **Temporary Cache**: Managed by `StorageCacheManager` strictly in `context.cacheDir` and `context.externalCacheDir`. Enforces a 200 MB maximum threshold, automated maintenance cleanup during charging (>50 MB after 6 hours), and user-triggered cache cleaning. User databases, settings, and historical battery data are strictly protected.
+- **Activity & Diagnostic Logs**: Persisted in Room Database (`activity_logs`).
+
+### 2. Central Capability Registry
+Android OS version checks and device hardware capabilities are consolidated in `CentralCapabilityRegistry` within the Central Unit architecture:
+- **24 Canonical Capabilities**:
+  1. `BATTERY_TELEMETRY`: Core battery broadcast telemetry (Level, Status, Plugged).
+  2. `BATTERY_TEMPERATURE`: Hardware battery thermal sensor.
+  3. `BATTERY_VOLTAGE`: Raw hardware terminal voltage.
+  4. `BATTERY_CURRENT`: Instantaneous hardware current sensor (detects OEM restriction).
+  5. `BATTERY_CHARGE_COUNTER`: Hardware battery charge counter (microampere-hours).
+  6. `BATTERY_HEALTH_STATUS`: Android battery health diagnostics string.
+  7. `BATTERY_POWER_CALCULATION`: Real-time raw and net power calculation.
+  8. `CHARGING_SPEED_CALCULATION`: Canonical speed tier classification (Slow, Normal, Fast, Ultra Fast).
+  9. `FAST_CHARGING_DETECTION`: Fast charging capability detection.
+  10. `CHARGING_STATE`: Dynamic charging/discharging/idle status sensing.
+  11. `CHARGER_CONNECTION_STATE`: Charger connection and plugged type detection (AC, USB, Wireless).
+  12. `BLUETOOTH_HARDWARE`: Physical Bluetooth adapter presence.
+  13. `BLUETOOTH_LE`: Bluetooth Low Energy (BLE) hardware support.
+  14. `BLUETOOTH_CONNECTED_INFO`: Active connected peripheral telemetry with bound proxy listeners.
+  15. `BLUETOOTH_BATTERY_LEVEL`: Bluetooth Battery Service (BAS) level retrieval.
+  16. `NOTIFICATIONS`: Runtime notification posting permissions.
+  17. `EXACT_ALARM`: Android 12+ exact alarm scheduling support.
+  18. `POWER_SAVE_MODE`: Android system Power Saver status detection.
+  19. `BATTERY_OPTIMIZATION_WHITELIST`: Device battery optimization exemption status.
+  20. `TEXT_TO_SPEECH`: System Text-to-Speech (TTS) engine presence.
+  21. `MEDIA_PLAYBACK_CONTROL`: Audio focus & active media playback control.
+  22. `USAGE_ACCESS`: Android AppOps usage access permission for app battery attribution.
+  23. `BACKGROUND_MONITORING`: 24/7 autonomous battery monitor background service.
+  24. `STORAGE_CACHE_OPERATIONS`: Safe local cache calculation and purge operations.
+- **Truthful Status Classification**: Each capability is mapped to `AVAILABLE`, `SUPPORTED`, `PERMISSION_REQUIRED`, `DISABLED`, `UNAVAILABLE`, or `UNSUPPORTED`. No capability status is fabricated.
+- **User Interface**: Surfaced live on the "Hardware" sub-tab of the Monitoring screen with status indicators and quick-clean cache controls.
 
 ### Documentation accuracy
 

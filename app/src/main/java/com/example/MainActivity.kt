@@ -52,10 +52,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.StatusDot
 import com.example.ui.navigation.NetraBottomNav
 import com.example.ui.navigation.NetraTab
-import com.example.ui.screens.ChargingScreen
+import com.example.ui.screens.BatteryScreen
 import com.example.ui.screens.DevicesScreen
-import com.example.ui.screens.DischargingScreen
-import com.example.ui.screens.GraphScreen
 import com.example.ui.screens.MonitoringScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StatusScreen
@@ -96,7 +94,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainAppContent(viewModel: NetraViewModel) {
     var currentTab by remember { mutableStateOf(NetraTab.HOME) }
-    var showBatteryGraph by remember { mutableStateOf(false) }
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
     val canonical by viewModel.canonicalState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -122,8 +119,8 @@ fun MainAppContent(viewModel: NetraViewModel) {
     }
 
     // BackHandler: return to Home tab if on secondary tab
-    BackHandler(enabled = showBatteryGraph || currentTab != NetraTab.HOME) {
-        if (showBatteryGraph) showBatteryGraph = false else currentTab = NetraTab.HOME
+    BackHandler(enabled = currentTab != NetraTab.HOME) {
+        currentTab = NetraTab.HOME
     }
 
     Scaffold(
@@ -249,14 +246,7 @@ fun MainAppContent(viewModel: NetraViewModel) {
             NetraBottomNav(
                 currentTab = currentTab,
                 onTabSelected = { tab ->
-                    showBatteryGraph = false
-                    currentTab = when (tab) {
-                        NetraTab.HOME -> NetraTab.HOME
-                        NetraTab.BATTERY -> NetraTab.BATTERY
-                        NetraTab.MONITORING -> NetraTab.MONITORING
-                        NetraTab.DEVICES -> NetraTab.DEVICES
-                        NetraTab.SETTINGS -> NetraTab.SETTINGS
-                    }
+                    currentTab = tab
                 }
             )
         },
@@ -275,33 +265,19 @@ fun MainAppContent(viewModel: NetraViewModel) {
             )
 
             Crossfade(
-                targetState = currentTab to showBatteryGraph,
+                targetState = currentTab,
                 label = "tab_transition",
                 modifier = Modifier.weight(1f)
-            ) { (tab, graphVisible) ->
-                if (graphVisible) {
-                    GraphScreen(viewModel = viewModel)
-                } else when (tab) {
+            ) { tab ->
+                when (tab) {
                     NetraTab.HOME -> StatusScreen(
                         viewModel = viewModel,
-                        onOpenGraph = { currentTab = NetraTab.BATTERY; showBatteryGraph = true },
+                        onOpenGraph = { currentTab = NetraTab.BATTERY },
                         onNavigateTab = { target ->
-                            currentTab = when (target) {
-                                NetraTab.MONITORING -> NetraTab.MONITORING
-                                NetraTab.DEVICES -> NetraTab.DEVICES
-                                NetraTab.BATTERY -> NetraTab.BATTERY
-                                NetraTab.HOME -> NetraTab.HOME
-                                NetraTab.SETTINGS -> NetraTab.SETTINGS
-                            }
+                            currentTab = target
                         }
                     )
-                    NetraTab.BATTERY -> {
-                        if (telemetry.isCharging) {
-                            ChargingScreen(viewModel = viewModel)
-                        } else {
-                            DischargingScreen(viewModel = viewModel)
-                        }
-                    }
+                    NetraTab.BATTERY -> BatteryScreen(viewModel = viewModel)
                     NetraTab.MONITORING -> MonitoringScreen(viewModel = viewModel)
                     NetraTab.DEVICES -> DevicesScreen(viewModel = viewModel)
                     NetraTab.SETTINGS -> SettingsScreen(viewModel = viewModel)

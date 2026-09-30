@@ -21,6 +21,12 @@ class NetraApplication : Application() {
     lateinit var centralDataCenter: NetraCentralDataCenter
         private set
 
+    lateinit var capabilityRegistry: com.example.service.CentralCapabilityRegistry
+        private set
+
+    lateinit var storageCacheManager: com.example.data.repository.StorageCacheManager
+        private set
+
     lateinit var calibrationManager: com.example.ai.BatteryCalibrationManager
         private set
 
@@ -39,11 +45,20 @@ class NetraApplication : Application() {
         database = NetraDatabase.getDatabase(this)
         settingsRepository = SettingsRepository(this)
         centralDataCenter = NetraCentralDataCenter()
+        capabilityRegistry = com.example.service.CentralCapabilityRegistry(this)
+        centralDataCenter.initPersistence(this)
+        centralDataCenter.initCapabilityRegistry(this)
+        storageCacheManager = com.example.data.repository.StorageCacheManager(this)
         announcementEngine = com.example.service.AnnouncementEngine(this)
         telemetrySentinel = com.example.service.TelemetrySentinel(this)
         calibrationManager = com.example.ai.BatteryCalibrationManager(this)
         powerProfileManager = com.example.ai.PowerProfileManager(this)
         batteryRepository = BatteryRepository(database.batteryDao(), database.chargingSessionDao(), database.activityLogDao())
+
+        // Initialize Bluetooth profile proxy services
+        try {
+            com.example.util.BluetoothHelper.initialize(this)
+        } catch (_: Exception) {}
 
         // Start 24/7 low-power service safely
         try {

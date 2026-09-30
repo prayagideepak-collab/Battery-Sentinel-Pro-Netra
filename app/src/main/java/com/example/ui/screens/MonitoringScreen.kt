@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.DeviceThermostat
 import androidx.compose.material.icons.filled.ElectricMeter
-import androidx.compose.material.icons.filled.Headset
+import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
@@ -72,9 +72,9 @@ import com.example.util.UsageStatsHelper
 import com.example.viewmodel.NetraViewModel
 
 enum class MonitoringSubTab {
+    SYSTEM,
     APPS,
-    DEVICES,
-    SYSTEM
+    LOGS
 }
 
 @Composable
@@ -83,11 +83,11 @@ fun MonitoringScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var selectedSubTab by remember { mutableStateOf(MonitoringSubTab.APPS) }
+    var selectedSubTab by remember { mutableStateOf(MonitoringSubTab.SYSTEM) }
 
     val appUsageList by viewModel.appUsageDrain.collectAsStateWithLifecycle()
-    val btDevices by viewModel.bluetoothDevices.collectAsStateWithLifecycle()
     val permissions by viewModel.systemPermissions.collectAsStateWithLifecycle()
+    val canonical by viewModel.canonicalState.collectAsStateWithLifecycle()
     val telemetry by viewModel.liveTelemetry.collectAsStateWithLifecycle()
     val totalRecords by viewModel.totalRecordCount.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -97,7 +97,7 @@ fun MonitoringScreen(
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Sub-Tab Row (Apps, Devices, System Telemetry)
+        // Sub-Tab Row (System Telemetry, Apps Usage, Activity Logs)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -108,31 +108,40 @@ fun MonitoringScreen(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             SubTabButton(
-                title = "Apps Tab",
-                icon = Icons.Default.Apps,
-                isSelected = selectedSubTab == MonitoringSubTab.APPS,
-                onClick = { selectedSubTab = MonitoringSubTab.APPS },
-                modifier = Modifier.weight(1f)
-            )
-            SubTabButton(
-                title = "Devices Tab",
-                icon = Icons.Default.Headset,
-                isSelected = selectedSubTab == MonitoringSubTab.DEVICES,
-                onClick = { selectedSubTab = MonitoringSubTab.DEVICES },
-                modifier = Modifier.weight(1f)
-            )
-            SubTabButton(
-                title = "System Telemetry",
+                title = "Hardware",
                 icon = Icons.Default.Memory,
                 isSelected = selectedSubTab == MonitoringSubTab.SYSTEM,
                 onClick = { selectedSubTab = MonitoringSubTab.SYSTEM },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).testTag("tab_sub_system")
+            )
+            SubTabButton(
+                title = "App Drain",
+                icon = Icons.Default.Apps,
+                isSelected = selectedSubTab == MonitoringSubTab.APPS,
+                onClick = { selectedSubTab = MonitoringSubTab.APPS },
+                modifier = Modifier.weight(1f).testTag("tab_sub_apps")
+            )
+            SubTabButton(
+                title = "Event Logs",
+                icon = Icons.Default.ListAlt,
+                isSelected = selectedSubTab == MonitoringSubTab.LOGS,
+                onClick = { selectedSubTab = MonitoringSubTab.LOGS },
+                modifier = Modifier.weight(1f).testTag("tab_sub_logs")
             )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         when (selectedSubTab) {
+            MonitoringSubTab.SYSTEM -> {
+                SystemTelemetryTabContent(
+                    canonical = canonical,
+                    telemetry = telemetry,
+                    totalRecords = totalRecords,
+                    powerSaverEnabled = settings.powerSaverEnabled,
+                    viewModel = viewModel
+                )
+            }
             MonitoringSubTab.APPS -> {
                 AppsTabContent(
                     appUsageList = appUsageList,
@@ -140,19 +149,8 @@ fun MonitoringScreen(
                     onOpenSettings = { UsageStatsHelper.openUsageAccessSettings(context) }
                 )
             }
-            MonitoringSubTab.DEVICES -> {
-                DevicesTabContent(
-                    btDevices = btDevices,
-                    isBluetoothGranted = permissions.isBluetoothGranted,
-                    onRefresh = { viewModel.refreshHardwareState() }
-                )
-            }
-            MonitoringSubTab.SYSTEM -> {
-                SystemTelemetryTabContent(
-                    telemetry = telemetry,
-                    totalRecords = totalRecords,
-                    powerSaverEnabled = settings.powerSaverEnabled
-                )
+            MonitoringSubTab.LOGS -> {
+                LogsScreen(viewModel = viewModel)
             }
         }
     }
@@ -463,10 +461,15 @@ private fun BluetoothDeviceRow(dev: BluetoothDeviceItem) {
 
 @Composable
 private fun SystemTelemetryTabContent(
+    canonical: com.example.model.NetraCentralState,
     telemetry: com.example.model.BatteryTelemetry,
     totalRecords: Int,
-    powerSaverEnabled: Boolean
+    powerSaverEnabled: Boolean,
+    viewModel: NetraViewModel
 ) {
+    val cacheStats by viewModel.cacheStats.collectAsStateWithLifecycle()
+    var cleanNotice by remember { mutableStateOf<String?>(null) }
+
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxSize()
@@ -481,12 +484,123 @@ private fun SystemTelemetryTabContent(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     TelemetryRow("Battery Chemistry", telemetry.technology)
                     TelemetryRow("Android OS Health Status", telemetry.healthString)
-                    TelemetryRow("Hardware Voltage", if (telemetry.isDataAvailable) "${telemetry.voltageMv} mV" else "Unavailable")
-                    TelemetryRow("Instantaneous Current", if (telemetry.isDataAvailable && telemetry.currentMa != 0) "${telemetry.currentMa} mA" else "Unavailable (OEM restricted)")
-                    TelemetryRow("Active Power Computation", if (telemetry.isDataAvailable) "${String.format("%.2f", telemetry.powerWatts)} W" else "Unavailable")
+                    TelemetryRow("Battery Level", canonical.batteryLevel?.let { "$it%" } ?: "Unavailable")
+                    TelemetryRow("Battery Temperature", canonical.temperatureCelsius?.let { "${String.format(java.util.Locale.US, "%.1f", it)} °C" } ?: "Unavailable")
+                    TelemetryRow("Hardware Voltage", canonical.voltageMv?.let { "$it mV" } ?: "Unavailable")
+                    TelemetryRow("Instantaneous Current", canonical.currentMa?.let { "$it mA" } ?: "Unavailable")
+                    TelemetryRow("Active Power Computation", canonical.powerWatts?.let { "${String.format(java.util.Locale.US, "%.2f", it)} W" } ?: "Unavailable")
+                    TelemetryRow("Charging Speed Tier", canonical.chargingSpeed.name.replace('_', ' '))
                     TelemetryRow("Screen State", if (telemetry.isScreenOn) "Active (Screen ON)" else "Standby (Screen OFF)")
                     TelemetryRow("Background Polling Mode", if (telemetry.isScreenOn) "Active (60-90s)" else "Ultra-Low Power (300-600s)")
                     TelemetryRow("Room Database Records", "$totalRecords Stored Records")
+                }
+            }
+        }
+
+        item {
+            SentinelCard(
+                title = "Storage & Cache Sentinel",
+                icon = Icons.Default.Storage,
+                dotState = if (cacheStats.isOverThreshold) DotState.THROTTLED else DotState.CONNECTED,
+                accentColor = if (cacheStats.isOverThreshold) StatusAmber else NetraEmerald
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TelemetryRow("Internal App Cache", "${cacheStats.internalCacheBytes / 1024} KB")
+                    TelemetryRow("External Cache", "${cacheStats.externalCacheBytes / 1024} KB")
+                    TelemetryRow("Total Cache Usage", "${cacheStats.totalCacheBytes / (1024 * 1024)} MB / 200 MB threshold")
+                    TelemetryRow(
+                        "Cache Status",
+                        if (cacheStats.isOverThreshold) "Exceeds 200 MB Threshold" else "Optimal (< 200 MB)"
+                    )
+                    if (cacheStats.lastCleanupTimestamp > 0L) {
+                        val formattedDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(cacheStats.lastCleanupTimestamp))
+                        TelemetryRow("Last Cleaned", "$formattedDate (${cacheStats.lastFreedBytes / 1024} KB freed)")
+                    }
+                    TelemetryRow("User Data Protection", "Guaranteed (DB & Settings preserved)")
+
+                    if (cleanNotice != null) {
+                        Text(
+                            text = cleanNotice!!,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = NetraEmerald
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = {
+                            viewModel.cleanCache { freed ->
+                                cleanNotice = "Cleaned ${freed / 1024} KB of temporary cache safely."
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NetraCyan),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("clean_cache_button")
+                    ) {
+                        Text("Clean Temporary Cache", fontWeight = FontWeight.Bold, color = Color.Black)
+                    }
+                }
+            }
+        }
+
+        item {
+            SentinelCard(
+                title = "Central Capability Registry",
+                icon = Icons.Default.Shield,
+                dotState = DotState.CONNECTED,
+                accentColor = NetraCyan
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Canonical device hardware and OS capability classification maintained by Central Unit.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    val caps = canonical.capabilities
+                    if (caps.isEmpty()) {
+                        Text("Detecting system capabilities...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        caps.forEach { (type, status) ->
+                            val statusColor = when (status) {
+                                com.example.model.CapabilityStatus.AVAILABLE -> StatusGreen
+                                com.example.model.CapabilityStatus.SUPPORTED -> NetraCyan
+                                com.example.model.CapabilityStatus.PERMISSION_REQUIRED -> StatusAmber
+                                com.example.model.CapabilityStatus.DISABLED -> MaterialTheme.colorScheme.onSurfaceVariant
+                                com.example.model.CapabilityStatus.UNAVAILABLE,
+                                com.example.model.CapabilityStatus.UNSUPPORTED -> StatusRed
+                                com.example.model.CapabilityStatus.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = type.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() },
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(statusColor.copy(alpha = 0.15f))
+                                        .border(0.5.dp, statusColor.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = status.name,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = statusColor
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

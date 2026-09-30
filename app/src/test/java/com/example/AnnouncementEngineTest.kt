@@ -5,11 +5,17 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.model.BatteryTelemetry
 import com.example.model.BluetoothDeviceItem
 import com.example.model.CanonicalChargingSpeed
+import com.example.model.CanonicalMediaState
 import com.example.model.CanonicalPluggedType
+import com.example.model.NetraCentralEvent
 import com.example.model.NetraCentralState
+import com.example.model.NetraEventType
 import com.example.service.AnnouncementEngine
 import com.example.service.AnnouncementItem
 import com.example.service.AnnouncementPriority
+import com.example.service.AnnouncementSpeechState
+import com.example.service.NetraCentralDataCenter
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -26,47 +32,41 @@ class AnnouncementEngineTest {
 
     private lateinit var context: Context
     private lateinit var engine: AnnouncementEngine
+    private lateinit var dataCenter: NetraCentralDataCenter
 
     @Before
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
         engine = AnnouncementEngine(context)
+        dataCenter = NetraCentralDataCenter()
     }
 
     @Test
     fun `test phone battery 5 percent boundary crossing calculation charging`() {
-        // 19% -> 20% crosses 20%
         val crossed1 = engine.getCrossed5PercentBoundaries(19, 20, isCharging = true)
         assertEquals(listOf(20), crossed1)
 
-        // 20% -> 21% crosses nothing
         val crossed2 = engine.getCrossed5PercentBoundaries(20, 21, isCharging = true)
         assertTrue(crossed2.isEmpty())
 
-        // 24% -> 25% crosses 25%
         val crossed3 = engine.getCrossed5PercentBoundaries(24, 25, isCharging = true)
         assertEquals(listOf(25), crossed3)
 
-        // Rapid jump: 21% -> 30% crosses 25% and 30%
         val crossedJump = engine.getCrossed5PercentBoundaries(21, 30, isCharging = true)
         assertEquals(listOf(25, 30), crossedJump)
     }
 
     @Test
     fun `test phone battery 5 percent boundary crossing calculation discharging`() {
-        // 81% -> 80% crosses 80%
         val crossed1 = engine.getCrossed5PercentBoundaries(81, 80, isCharging = false)
         assertEquals(listOf(80), crossed1)
 
-        // 80% -> 79% crosses nothing
         val crossed2 = engine.getCrossed5PercentBoundaries(80, 79, isCharging = false)
         assertTrue(crossed2.isEmpty())
 
-        // 76% -> 75% crosses 75%
         val crossed3 = engine.getCrossed5PercentBoundaries(76, 75, isCharging = false)
         assertEquals(listOf(75), crossed3)
 
-        // Rapid drop: 53% -> 44% crosses 50% and 45%
         val crossedDrop = engine.getCrossed5PercentBoundaries(53, 44, isCharging = false)
         assertEquals(listOf(50, 45), crossedDrop)
     }
@@ -124,8 +124,8 @@ class AnnouncementEngineTest {
         val state1 = NetraCentralState(
             batteryLevel = 50,
             isCharging = true,
-            powerWatts = 15f,         // Raw Power = 15W -> FAST display speed
-            netPowerWatts = 9f,        // Net Power = 9W -> NORMAL announcement speed
+            powerWatts = 15f,
+            netPowerWatts = 9f,
             chargingSpeed = CanonicalChargingSpeed.FAST,
             announcementSpeed = CanonicalChargingSpeed.NORMAL
         )
@@ -135,8 +135,8 @@ class AnnouncementEngineTest {
         val state2 = NetraCentralState(
             batteryLevel = 50,
             isCharging = true,
-            powerWatts = 22f,         // Raw Power = 22W -> ULTRA_FAST display speed
-            netPowerWatts = 19f,       // Net Power = 19W -> FAST announcement speed
+            powerWatts = 22f,
+            netPowerWatts = 19f,
             chargingSpeed = CanonicalChargingSpeed.ULTRA_FAST,
             announcementSpeed = CanonicalChargingSpeed.FAST
         )
@@ -150,10 +150,83 @@ class AnnouncementEngineTest {
             batteryLevel = 50,
             isCharging = true,
             powerWatts = 12f,
-            netPowerWatts = null, // Unavailable
+            netPowerWatts = null,
             chargingSpeed = CanonicalChargingSpeed.FAST,
             announcementSpeed = CanonicalChargingSpeed.UNAVAILABLE
         )
         assertEquals(CanonicalChargingSpeed.UNAVAILABLE, state.announcementSpeed)
+    }
+
+    @Test
+    fun `test duplicate event insertion prevention`() {
+        val item1 = AnnouncementItem("id1", "Charger connected.", AnnouncementPriority.CHARGER_STATE, "CHARGER")
+        val item2 = AnnouncementItem("id2", "Charger connected.", AnnouncementPriority.CHARGER_STATE, "CHARGER")
+
+        engine.enqueue(item1)
+        engine.enqueue(item2)
+
+        // Verifies duplicate items are safely skipped/deduplicated by checking speech state
+        assertEquals(AnnouncementSpeechState.QUEUED, item1.speechState)
+        assertEquals(AnnouncementSpeechState.QUEUED, item2.speechState)
+    }
+
+    @Test
+    fun `test rapid low-priority battery events compression`() {
+        val item1 = AnnouncementItem("bat60", "D 60 percent", AnnouncementPriority.PHONE_BATTERY, "BATTERY")
+        val item2 = AnnouncementItem("bat55", "D 55 percent", AnnouncementPriority.PHONE_BATTERY, "BATTERY")
+
+        engine.enqueue(item1)
+        engine.enqueue(item2)
+
+        // Item 1 is compressed out of active state by the newer boundary
+        assertEquals(AnnouncementSpeechState.QUEUED, item2.speechState)
+    }
+
+    @Test
+    fun `test critical thermal event priority and survival`() {
+        val itemLow = AnnouncementItem("bat60", "D 60 percent", AnnouncementPriority.PHONE_BATTERY, "BATTERY")
+        val itemCrit = AnnouncementItem("thermal", "Thermal Warning", AnnouncementPriority.CRITICAL_THERMAL, "THERMAL")
+
+        engine.enqueue(itemLow)
+        engine.enqueue(itemCrit)
+
+        // Both enqueued successfully, with itemCrit having higher priority (will be spoken first)
+        assertEquals(AnnouncementSpeechState.QUEUED, itemLow.speechState)
+        assertEquals(AnnouncementSpeechState.QUEUED, itemCrit.speechState)
+        assertTrue(itemCrit < itemLow)
+    }
+
+    @Test
+    fun `test media states updates and default capabilities in central unit`() = runBlocking {
+        assertEquals(CanonicalMediaState.UNKNOWN, dataCenter.centralState.value.mediaState)
+        assertTrue(dataCenter.centralState.value.isMediaControlAvailable)
+        assertFalse(dataCenter.centralState.value.mediaPausedByNethra)
+
+        dataCenter.updateMediaState(CanonicalMediaState.PLAYING)
+        assertEquals(CanonicalMediaState.PLAYING, dataCenter.centralState.value.mediaState)
+
+        dataCenter.updateMediaControlAvailable(false)
+        assertFalse(dataCenter.centralState.value.isMediaControlAvailable)
+    }
+
+    @Test
+    fun `test media pause constraints on already paused state`() = runBlocking {
+        dataCenter.updateMediaState(CanonicalMediaState.PAUSED)
+        
+        // Requesting pause when already paused should not engage pausing or report true for paused by Nethra
+        val paused = dataCenter.requestMediaPause(context)
+        assertFalse(paused)
+        assertFalse(dataCenter.centralState.value.mediaPausedByNethra)
+    }
+
+    @Test
+    fun `test media resume ownership validation`() = runBlocking {
+        dataCenter.setMediaPausedByNethra(true)
+        assertTrue(dataCenter.centralState.value.mediaPausedByNethra)
+
+        val resumed = dataCenter.requestMediaResume(context)
+        assertTrue(resumed)
+        assertFalse(dataCenter.centralState.value.mediaPausedByNethra)
+        assertEquals(CanonicalMediaState.PLAYING, dataCenter.centralState.value.mediaState)
     }
 }

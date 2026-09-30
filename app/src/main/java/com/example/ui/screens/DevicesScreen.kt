@@ -49,6 +49,7 @@ import com.example.ui.theme.NetraEmerald
 import com.example.ui.theme.StatusAmber
 import com.example.ui.theme.StatusGreen
 import com.example.ui.theme.StatusRed
+import com.example.ui.theme.DangerRed
 import com.example.viewmodel.NetraViewModel
 
 @Composable
@@ -57,9 +58,16 @@ fun DevicesScreen(
     modifier: Modifier = Modifier
 ) {
     val btDevices by viewModel.bluetoothDevices.collectAsStateWithLifecycle()
+    val btHistory by viewModel.bluetoothHistory.collectAsStateWithLifecycle()
     val permissions by viewModel.systemPermissions.collectAsStateWithLifecycle()
 
-    val filteredDevices = btDevices.filter { it.isConnected }
+    var activeTab by remember { mutableStateOf("LIVE") }
+
+    val filteredDevices = if (activeTab == "LIVE") {
+        btDevices.filter { it.isConnected }
+    } else {
+        btHistory.filter { !it.isConnected }
+    }
 
     LazyColumn(
         modifier = modifier
@@ -95,6 +103,35 @@ fun DevicesScreen(
             }
         }
 
+        // Live vs History tab switcher
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = activeTab == "LIVE",
+                    onClick = { activeTab = "LIVE" },
+                    label = { Text("LIVE CONNECTED (${btDevices.filter { it.isConnected }.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = NetraEmerald.copy(alpha = 0.25f),
+                        selectedLabelColor = NetraEmerald
+                    ),
+                    modifier = Modifier.weight(1f).testTag("tab_live_bt")
+                )
+                FilterChip(
+                    selected = activeTab == "HISTORY",
+                    onClick = { activeTab = "HISTORY" },
+                    label = { Text("HISTORY (${btHistory.filter { !it.isConnected }.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = NetraCyan.copy(alpha = 0.25f),
+                        selectedLabelColor = NetraCyan
+                    ),
+                    modifier = Modifier.weight(1f).testTag("tab_history_bt")
+                )
+            }
+        }
+
         if (filteredDevices.isEmpty()) {
             item {
                 Box(
@@ -109,8 +146,13 @@ fun DevicesScreen(
                         Icon(imageVector = Icons.Default.Headset, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(36.dp))
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (!permissions.isBluetoothGranted) "Bluetooth permission needed to query device batteries."
-                            else "No connected Bluetooth devices. Paired but disconnected devices are hidden.",
+                            text = if (!permissions.isBluetoothGranted) {
+                                "Bluetooth permission needed to query device batteries."
+                            } else if (activeTab == "LIVE") {
+                                "No connected Bluetooth devices. Connect a peripheral to trace power telemetry."
+                            } else {
+                                "No registered historical Bluetooth devices."
+                            },
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -119,7 +161,7 @@ fun DevicesScreen(
             }
         } else {
             items(filteredDevices) { dev ->
-                DeviceSentinelCard(device = dev)
+                DeviceSentinelCard(device = dev, isLive = activeTab == "LIVE")
             }
         }
 
@@ -130,7 +172,16 @@ fun DevicesScreen(
 }
 
 @Composable
-private fun DeviceSentinelCard(device: BluetoothDeviceItem) {
+private fun DeviceSentinelCard(device: BluetoothDeviceItem, isLive: Boolean) {
+    // Battery Color Visual States Mapping
+    val batteryColor = when {
+        device.batteryPercent == null -> MaterialTheme.colorScheme.onSurfaceVariant
+        device.batteryPercent!! >= 75 -> NetraEmerald
+        device.batteryPercent!! >= 50 -> StatusGreen
+        device.batteryPercent!! >= 20 -> StatusAmber
+        else -> DangerRed
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -138,7 +189,7 @@ private fun DeviceSentinelCard(device: BluetoothDeviceItem) {
             .background(MaterialTheme.colorScheme.surface)
             .border(
                 1.dp,
-                if (device.isConnected) NetraEmerald.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                if (isLive) NetraEmerald.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
                 RoundedCornerShape(14.dp)
             )
             .padding(16.dp)
@@ -157,13 +208,13 @@ private fun DeviceSentinelCard(device: BluetoothDeviceItem) {
                         modifier = Modifier
                             .size(36.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (device.isConnected) NetraEmerald.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant),
+                            .background(if (isLive) NetraEmerald.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (device.deviceType.contains("Watch")) Icons.Default.Watch else Icons.Default.Headset,
                             contentDescription = null,
-                            tint = if (device.isConnected) NetraEmerald else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (isLive) NetraEmerald else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -183,21 +234,22 @@ private fun DeviceSentinelCard(device: BluetoothDeviceItem) {
                     }
                 }
 
-                // Battery Badge
+                // Battery Badge (Battery-dependent color mapping)
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (device.batteryPercent != null) NetraEmerald.copy(alpha = 0.15f)
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                        )
+                        .background(batteryColor.copy(alpha = 0.15f))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = if (device.batteryPercent != null) "🔋 ${device.batteryPercent}%" else "Battery: Unavailable",
+                        text = if (device.batteryPercent != null) {
+                            if (isLive) "🔋 ${device.batteryPercent}%" else "🔋 ${device.batteryPercent}% (Last known)"
+                        } else {
+                            "Battery: Unavailable"
+                        },
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (device.batteryPercent != null) NetraEmerald else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = batteryColor
                     )
                 }
             }
@@ -214,14 +266,14 @@ private fun DeviceSentinelCard(device: BluetoothDeviceItem) {
                         modifier = Modifier
                             .size(6.dp)
                             .clip(CircleShape)
-                            .background(if (device.isConnected) StatusGreen else StatusAmber)
+                            .background(if (isLive) StatusGreen else StatusAmber)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (device.isConnected) "Status: Connected & Streaming" else "Status: Paired (Offline)",
+                        text = if (isLive) "Status: Connected & Streaming" else "Status: Previously Connected (Offline)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (device.isConnected) NetraEmerald else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isLive) NetraEmerald else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 

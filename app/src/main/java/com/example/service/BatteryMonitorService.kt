@@ -338,6 +338,13 @@ class BatteryMonitorService : Service() {
             NetraApplication.instance.telemetrySentinel.onTelemetryReceived(telemetry)
         } catch (_: Exception) {}
 
+        // Evaluate Storage Cache safety threshold asynchronously
+        try {
+            serviceScope.launch {
+                NetraApplication.instance.storageCacheManager.autoCleanIfAppropriate(isCharging)
+            }
+        } catch (_: Exception) {}
+
         // Persist to Room DB with intelligent debouncing
         serviceScope.launch {
             val record = BatteryRecord(

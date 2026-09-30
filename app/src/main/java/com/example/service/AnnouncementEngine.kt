@@ -34,13 +34,18 @@ enum class AnnouncementPriority(val level: Int) {
     INFORMATIONAL(7)
 }
 
+enum class AnnouncementSpeechState {
+    QUEUED, SPEAKING, COMPLETED, FAILED, CANCELLED
+}
+
 data class AnnouncementItem(
     val id: String,
     val text: String,
     val priority: AnnouncementPriority,
     val category: String,
     val isNightException: Boolean = false,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    var speechState: AnnouncementSpeechState = AnnouncementSpeechState.QUEUED
 ) : Comparable<AnnouncementItem> {
     override fun compareTo(other: AnnouncementItem): Int {
         val prioDiff = this.priority.level.compareTo(other.priority.level)
@@ -65,6 +70,9 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
     private val queue = PriorityQueue<AnnouncementItem>()
     private val isSpeaking = AtomicBoolean(false)
     private var currentPlayingAnnouncement: AnnouncementItem? = null
+
+    // Event ID tracking for absolute deduplication across observers/recomposition
+    private val processedEventIds = mutableSetOf<String>()
 
     // State Tracking & Baseline for Deduplication inside Announcement Engine
     private var isBaselineEstablished = false
@@ -128,21 +136,37 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
                     Log.d(TAG, "TTS started: $utteranceId")
+                    currentPlayingAnnouncement?.speechState = AnnouncementSpeechState.SPEAKING
                 }
 
                 override fun onDone(utteranceId: String?) {
                     Log.d(TAG, "TTS done: $utteranceId")
+                    currentPlayingAnnouncement?.let {
+                        if (it.speechState == AnnouncementSpeechState.SPEAKING) {
+                            it.speechState = AnnouncementSpeechState.COMPLETED
+                        }
+                    }
                     onSpeechFinished()
                 }
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
                     Log.e(TAG, "TTS error on utterance: $utteranceId")
+                    currentPlayingAnnouncement?.let {
+                        if (it.speechState != AnnouncementSpeechState.CANCELLED) {
+                            it.speechState = AnnouncementSpeechState.FAILED
+                        }
+                    }
                     onSpeechFinished()
                 }
 
                 override fun onError(utteranceId: String?, errorCode: Int) {
                     Log.e(TAG, "TTS error ($errorCode) on utterance: $utteranceId")
+                    currentPlayingAnnouncement?.let {
+                        if (it.speechState != AnnouncementSpeechState.CANCELLED) {
+                            it.speechState = AnnouncementSpeechState.FAILED
+                        }
+                    }
                     onSpeechFinished()
                 }
             })
@@ -207,6 +231,15 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
     }
 
     private fun handleCanonicalEvent(event: NetraCentralEvent) {
+        if (processedEventIds.contains(event.eventId)) {
+            Log.d(TAG, "Canonical event already processed by AnnouncementEngine -> ${event.eventId}")
+            return
+        }
+        processedEventIds.add(event.eventId)
+        if (processedEventIds.size > 200) {
+            processedEventIds.remove(processedEventIds.first())
+        }
+
         val settings = getSettings()
         val now = System.currentTimeMillis()
 
@@ -434,10 +467,12 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
             return
         }
 
-        // 2. Night Protection Check (Default 11:00 PM -> 6:00 AM)
-        if (settings.nightProtectionEnabled && isNightTime(settings.nightStartHour, settings.nightEndHour)) {
+        // 2. Night Protection Check (Delegated strictly to Central Unit canonical state)
+        val dataCenter = NetraApplication.instance.centralDataCenter
+        dataCenter.refreshNightProtectionStateSynchronously()
+        if (dataCenter.centralState.value.isNightProtectionActive) {
             if (!item.isNightException) {
-                Log.d(TAG, "Announcement suppressed by Night Protection (${settings.nightStartHour}:00-${settings.nightEndHour}:00) -> ${item.text}")
+                Log.d(TAG, "Announcement suppressed by Night Protection policy decision -> ${item.text}")
                 return
             }
         }
@@ -455,11 +490,25 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
             queue.removeAll { it.priority == AnnouncementPriority.BLUETOOTH_BATTERY }
         }
 
-        // 5. Cap queue size to prevent backlog
-        if (queue.size >= 8) {
-            queue.poll() // remove lowest priority
+        // 5. Interrupt active low priority speaking if a critical thermal event arrives
+        if (item.priority == AnnouncementPriority.CRITICAL_THERMAL) {
+            val current = currentPlayingAnnouncement
+            if (current != null && current.priority != AnnouncementPriority.CRITICAL_THERMAL) {
+                Log.i(TAG, "Interrupting low-priority speech for critical thermal event!")
+                current.speechState = AnnouncementSpeechState.CANCELLED
+                try {
+                    tts?.stop() // This initiates recovery/next queue poll
+                } catch (_: Exception) {}
+            }
         }
 
+        // 6. Cap queue size to prevent backlog
+        if (queue.size >= 8) {
+            val discarded = queue.poll() // remove lowest priority
+            discarded?.speechState = AnnouncementSpeechState.CANCELLED
+        }
+
+        item.speechState = AnnouncementSpeechState.QUEUED
         queue.offer(item)
         processQueue()
     }
@@ -492,16 +541,22 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
         scope.launch(Dispatchers.IO) {
             val settings = getSettings()
             if (settings.mediaPlaybackHandlingEnabled) {
-                mediaController.prepareForAnnouncement()
+                try {
+                    NetraApplication.instance.centralDataCenter.requestMediaPause(context)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error requesting media pause from central unit", e)
+                }
             }
 
             val params = Bundle().apply {
                 putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, nextItem.id)
             }
 
+            nextItem.speechState = AnnouncementSpeechState.SPEAKING
             val result = tts?.speak(nextItem.text, TextToSpeech.QUEUE_FLUSH, params, nextItem.id)
             if (result != TextToSpeech.SUCCESS) {
                 Log.e(TAG, "TTS speak failed for: ${nextItem.text}")
+                nextItem.speechState = AnnouncementSpeechState.FAILED
                 onSpeechFinished()
             } else {
                 Log.i(TAG, "Spoken: '${nextItem.text}' [Priority: ${nextItem.priority}]")
@@ -515,10 +570,10 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
             try {
                 val settings = getSettings()
                 if (settings.mediaPlaybackHandlingEnabled) {
-                    mediaController.restoreAfterAnnouncement()
+                    NetraApplication.instance.centralDataCenter.requestMediaResume(context)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error restoring media playback", e)
+                Log.e(TAG, "Error restoring media playback via central unit", e)
             } finally {
                 isSpeaking.set(false)
                 currentPlayingAnnouncement = null

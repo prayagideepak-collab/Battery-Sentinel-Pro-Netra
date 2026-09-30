@@ -159,16 +159,38 @@ fun CircularBatteryGauge(
                     )
                 }
 
+                val statusLabel = when (canonical.isCharging) {
+                    true -> {
+                        val powerStr = canonical.powerWatts?.let { String.format(java.util.Locale.US, "%.1fW", it) }
+                        val speedStr = canonical.chargingSpeed.name.replace('_', ' ')
+                        if (powerStr != null) "$powerStr • $speedStr" else speedStr
+                    }
+                    false -> if (canonical.isChargerConnected == true) "Plugged in • Idle" else "On Battery (Discharging)"
+                    null -> "Status unavailable"
+                }
+
                 Text(
-                    text = when (canonical.isCharging) {
-                        true -> canonical.chargingSpeed.name.replace('_', ' ')
-                        false -> "Not charging"
-                        null -> "Status unavailable"
-                    },
+                    text = statusLabel,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
                     color = if (canonical.isCharging == true) NetraEmerald else MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                val etaLabel = when (canonical.isCharging) {
+                    true -> canonical.chargingEtaMinutes?.let { "Full in ~$it min" } ?: "ETA calculating..."
+                    false -> canonical.dischargingEtaMinutes?.let { "~$it min remaining" } ?: "ETA calculating..."
+                    null -> null
+                }
+
+                if (etaLabel != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = etaLabel,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = NetraCyan
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(6.dp))
 

@@ -37,6 +37,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+import kotlinx.coroutines.flow.map
 
 enum class TimeWindowFilter {
     ONE_HOUR,
@@ -116,9 +119,14 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
         repository.getLogsByCategory(cat)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Bluetooth Devices State
-    private val _bluetoothDevices = MutableStateFlow<List<BluetoothDeviceItem>>(emptyList())
-    val bluetoothDevices: StateFlow<List<BluetoothDeviceItem>> = _bluetoothDevices.asStateFlow()
+    // Bluetooth Devices State (Streaming strictly from Central Unit)
+    val bluetoothDevices: StateFlow<List<BluetoothDeviceItem>> = NetraApplication.instance.centralDataCenter.centralState
+        .map { it.bluetoothDevices }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val bluetoothHistory: StateFlow<List<BluetoothDeviceItem>> = NetraApplication.instance.centralDataCenter.centralState
+        .map { it.bluetoothHistory }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // App Usage Drain State
     private val _appUsageDrain = MutableStateFlow<List<AppUsageItem>>(emptyList())
@@ -185,7 +193,8 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
         val app = getApplication<Application>()
         _systemPermissions.value = PermissionHelper.checkAllPermissions(app)
         viewModelScope.launch(Dispatchers.IO) {
-            _bluetoothDevices.value = BluetoothHelper.getBluetoothDevices(app)
+            val list = BluetoothHelper.getBluetoothDevices(app)
+            NetraApplication.instance.centralDataCenter.processBluetoothDevices(list)
             _appUsageDrain.value = UsageStatsHelper.getAppUsageDrainList(app)
         }
     }
@@ -497,6 +506,32 @@ class NetraViewModel(application: Application) : AndroidViewModel(application) {
             val aiMsg = LongevityChatMessage(text = answer, isUser = false)
             _chatMessages.value = _chatMessages.value + aiMsg
             _isChatLoading.value = false
+        }
+    }
+
+    // Storage & Cache Stats & Control (Centralized via StorageCacheManager)
+    val cacheStats: StateFlow<com.example.data.repository.CacheStorageStats> =
+        NetraApplication.instance.storageCacheManager.cacheStats
+
+    fun refreshCacheStats() {
+        NetraApplication.instance.storageCacheManager.refreshCacheStats()
+    }
+
+    fun cleanCache(onResult: (Long) -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val freedBytes = NetraApplication.instance.storageCacheManager.cleanCache(force = true)
+            if (freedBytes > 0) {
+                repository.logEvent(
+                    title = "Temporary Cache Cleaned",
+                    message = "Freed ${freedBytes / 1024} KB of temporary cache safely without touching user databases or settings.",
+                    category = "SYSTEM",
+                    severity = "INFO",
+                    dotColor = "CYAN"
+                )
+            }
+            withContext(Dispatchers.Main) {
+                onResult(freedBytes)
+            }
         }
     }
 

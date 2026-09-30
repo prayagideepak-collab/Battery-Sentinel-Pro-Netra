@@ -115,14 +115,6 @@ fun StatusScreen(
     val isDeepAiLoading by viewModel.isDeepAiLoading.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
-    if (!telemetry.isDataAvailable || !canonical.hasCompleteLegacyReading()) {
-        Column(modifier = modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("Battery telemetry incomplete", color = MaterialTheme.colorScheme.onSurface)
-            CircularBatteryGauge(canonical = canonical)
-            Text("Other readings and diagnostics will appear after a complete device sample.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        return
-    }
 
     Column(
         modifier = modifier
