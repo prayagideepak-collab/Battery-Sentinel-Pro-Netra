@@ -17,6 +17,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import kotlin.math.abs
 import com.example.MainActivity
 import com.example.NetraApplication
 import com.example.R
@@ -548,41 +549,82 @@ class BatteryMonitorService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val level = t.batteryLevel?.let { "$it%" } ?: "Battery unavailable"
-        val temperature = t.temperatureCelsius?.let { "$it°C" } ?: "Temperature unavailable"
-        val voltage = t.voltageMv?.let { "${it}mV" } ?: "Voltage unavailable"
-        val speed = when (t.chargingSpeed) {
-            CanonicalChargingSpeed.SLOW -> "Slow charging"
-            CanonicalChargingSpeed.NORMAL -> "Normal charging"
-            CanonicalChargingSpeed.FAST -> "Fast charging"
-            CanonicalChargingSpeed.ULTRA_FAST -> "Ultra-fast charging"
-            CanonicalChargingSpeed.UNAVAILABLE -> "Speed unavailable"
+        val levelStr = t.batteryLevel?.let { "$it%" } ?: "Unavailable"
+        val tempStr = t.temperatureCelsius?.let { String.format(java.util.Locale.US, "%.1f°C", it) }
+
+        val speedText = when (t.chargingSpeed) {
+            CanonicalChargingSpeed.SLOW -> "Slow"
+            CanonicalChargingSpeed.NORMAL -> "Normal"
+            CanonicalChargingSpeed.FAST -> "Fast"
+            CanonicalChargingSpeed.ULTRA_FAST -> "Ultra Fast"
+            CanonicalChargingSpeed.UNAVAILABLE -> ""
         }
-        val state = when (t.isCharging) {
-            true -> "Charging"
-            false -> when (t.isChargerConnected) {
-                true -> "Connected, not charging"
-                false -> "On battery"
-                null -> "Connection unavailable"
+
+        val rawPowerText = t.powerWatts?.let { String.format(java.util.Locale.US, "%.1fW", it) }
+        val speedDisplay = if (rawPowerText != null && speedText.isNotEmpty()) {
+            "$rawPowerText • $speedText"
+        } else if (rawPowerText != null) {
+            rawPowerText
+        } else if (speedText.isNotEmpty()) {
+            speedText
+        } else {
+            ""
+        }
+
+        val now = System.currentTimeMillis()
+        val title: String
+        val lines = mutableListOf<String>()
+
+        if (t.isCharging == true) {
+            title = "Charging • $levelStr"
+            if (speedDisplay.isNotEmpty()) {
+                lines.add(speedDisplay)
             }
-            null -> "Status unavailable"
+            t.chargingEtaMinutes?.let { eta ->
+                lines.add(if (eta >= 60) "ETA ${eta / 60}h ${eta % 60}m" else "ETA $eta min")
+            }
+            t.chargingStartedAt?.let { at ->
+                val mins = ((now - at).coerceAtLeast(0L) / 60_000L)
+                lines.add(if (mins >= 60) "Charging ${mins / 60}h ${mins % 60}m" else "Charging $mins min")
+            }
+            tempStr?.let { lines.add(it) }
+        } else if (t.isChargerConnected == false || t.isCharging == false) {
+            if (t.isChargerConnected == true) {
+                title = "Connected, not charging • $levelStr"
+                t.chargerConnectedAt?.let { at ->
+                    val mins = ((now - at).coerceAtLeast(0L) / 60_000L)
+                    lines.add(if (mins >= 60) "Connected ${mins / 60}h ${mins % 60}m" else "Connected $mins min")
+                }
+                tempStr?.let { lines.add(it) }
+            } else {
+                title = "Battery • $levelStr"
+                val drainPower = t.consumptionPowerWatts ?: t.netPowerWatts?.let { if (it < 0) abs(it) else null } ?: t.powerWatts?.let { if (it < 0) abs(it) else null }
+                drainPower?.let {
+                    lines.add(String.format(java.util.Locale.US, "Drain %.1fW", it))
+                }
+                t.dischargingEtaMinutes?.let { eta ->
+                    lines.add(if (eta >= 60) "ETA ${eta / 60}h ${eta % 60}m" else "ETA $eta min")
+                }
+                t.dischargingStartedAt?.let { at ->
+                    val mins = ((now - at).coerceAtLeast(0L) / 60_000L)
+                    lines.add(if (mins >= 60) "On battery ${mins / 60}h ${mins % 60}m" else "On battery $mins min")
+                }
+                tempStr?.let { lines.add(it) }
+            }
+        } else {
+            title = "Battery • $levelStr"
+            lines.add("Idle")
+            tempStr?.let { lines.add(it) }
         }
-        val sessionAt = when (t.isCharging) {
-            true -> t.chargingStartedAt
-            false -> if (t.isChargerConnected == false) t.dischargingStartedAt else null
-            null -> null
-        }
-        val duration = sessionAt?.let { at ->
-            val minutes = ((System.currentTimeMillis() - at).coerceAtLeast(0L) / 60_000L)
-            " • ${minutes}m in state"
-        } ?: ""
-        val title = "Netra Sentinel: $level ($state)"
-        val content = "$speed • $temperature • $voltage$duration"
+
+        val contentText = lines.firstOrNull() ?: (tempStr ?: "Monitoring active")
+        val bigText = lines.joinToString(" • ")
 
         return NotificationCompat.Builder(this, CHANNEL_SERVICE_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
-            .setContentText(content)
+            .setContentText(bigText.ifEmpty { contentText })
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText.ifEmpty { contentText }))
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)
