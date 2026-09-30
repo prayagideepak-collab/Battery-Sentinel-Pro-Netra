@@ -347,4 +347,24 @@ class NetraCentralDataCenterTest {
         assertNull(dataCenter.centralState.value.powerWatts)
         assertEquals(CanonicalChargingSpeed.UNAVAILABLE, dataCenter.centralState.value.chargingSpeed)
     }
+
+    @Test
+    fun `test live numeric power updates without repeated speed events`() = runTest(testDispatcher) {
+        val events = mutableListOf<NetraCentralEvent>()
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            dataCenter.centralEvents.toList(events)
+        }
+
+        // 6.1W (4000mV * 1525mA = 6.1W + consumption)
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 1525000, null, null)
+        // 6.4W
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 1600000, null, null)
+        // 7.2W
+        dataCenter.processRawInput(50, 100, android.os.BatteryManager.BATTERY_STATUS_CHARGING, android.os.BatteryManager.BATTERY_PLUGGED_AC, 300, 4000, 1800000, null, null)
+
+        job.cancel()
+
+        assertEquals(1, events.count { it.eventType == NetraEventType.SPEED_CHANGED })
+        assertEquals(CanonicalChargingSpeed.NORMAL, dataCenter.centralState.value.chargingSpeed)
+    }
 }

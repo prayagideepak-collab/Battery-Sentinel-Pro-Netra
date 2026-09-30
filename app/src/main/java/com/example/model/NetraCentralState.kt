@@ -25,8 +25,11 @@ data class NetraCentralState(
     val temperatureCelsius: Float? = null, // null if unavailable
     val voltageMv: Int? = null, // null if unavailable
     val currentMa: Int? = null, // null if unavailable
-    val powerWatts: Float? = null, // null if unavailable
-    val chargingSpeed: CanonicalChargingSpeed = CanonicalChargingSpeed.UNAVAILABLE,
+    val powerWatts: Float? = null, // Raw incoming charging power (or discharge power if discharging)
+    val netPowerWatts: Float? = null, // Net effective power (Raw incoming - consumption)
+    val consumptionPowerWatts: Float? = null, // Phone consumption power
+    val chargingSpeed: CanonicalChargingSpeed = CanonicalChargingSpeed.UNAVAILABLE, // Based on raw power
+    val announcementSpeed: CanonicalChargingSpeed = CanonicalChargingSpeed.UNAVAILABLE, // Based on net effective power
     val bluetoothConnected: Boolean? = null,
     val bluetoothBatteryPercent: Int? = null,
     val lastUpdateTimestamp: Long = 0L,

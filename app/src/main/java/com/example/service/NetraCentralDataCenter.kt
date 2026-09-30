@@ -26,17 +26,22 @@ class NetraCentralDataCenter {
     private val _centralEvents = MutableSharedFlow<NetraCentralEvent>(extraBufferCapacity = 64)
     val centralEvents: SharedFlow<NetraCentralEvent> = _centralEvents.asSharedFlow()
 
-    // Tracking for deduplication
+    // Tracking for deduplication & sessions
     private var lastConnectedState: Boolean? = null
     private var lastChargingState: Boolean? = null
     private var lastSpeedCategory: CanonicalChargingSpeed? = null
     private var lastBatteryLevelBoundary: Int? = null
+
     private var chargerConnectedAt: Long? = null
     private var chargingStartedAt: Long? = null
     private var chargingStoppedAt: Long? = null
     private var chargerDisconnectedAt: Long? = null
     private var dischargingStartedAt: Long? = null
     private var lastDischargingStatus = false
+
+    // Historical samples for live ETA calculation
+    private data class LevelSample(val level: Int, val timestamp: Long)
+    private val levelSamples = mutableListOf<LevelSample>()
 
     suspend fun processRawInput(
         level: Int,
@@ -86,41 +91,120 @@ class NetraCentralDataCenter {
                 currentMicroAmps / 1000
             } else null
 
-            val powerWatts = if (voltageMv != null && currentMa != null) {
-                (voltageMv.toFloat() * abs(currentMa).toFloat()) / 1_000_000f
+            // Power calculations:
+            // Net battery power (W) = Voltage(mV) * current(mA) / 1,000,000
+            val batteryPowerWatts = if (voltageMv != null && currentMa != null) {
+                (voltageMv.toFloat() * currentMa.toFloat()) / 1_000_000f
             } else null
 
-            // User defined charging speed rule:
-            // < 5W = Slow, 5W to <10W = Normal, 10W to 20W = Fast, >20W = Ultra Fast
-            val speedCategory = if (isCharging == true && powerWatts != null) {
+            // Estimate system consumption (default ~3.0W or derived from negative current when discharging)
+            val consumptionWatts = if (currentMa != null && currentMa < 0 && voltageMv != null) {
+                abs(voltageMv.toFloat() * currentMa.toFloat()) / 1_000_000f
+            } else {
+                3.0f // baseline system consumption load
+            }
+
+            val rawPowerWatts = if (isCharging == true) {
+                val net = if (batteryPowerWatts != null && batteryPowerWatts > 0) batteryPowerWatts else 0f
+                net + consumptionWatts
+            } else if (batteryPowerWatts != null && batteryPowerWatts < 0) {
+                0f // discharging has 0 raw incoming charging power
+            } else {
+                null
+            }
+
+            val netPowerWatts = if (isCharging == true) {
+                batteryPowerWatts?.coerceAtLeast(0f)
+            } else if (batteryPowerWatts != null) {
+                batteryPowerWatts // negative when discharging
+            } else {
+                null
+            }
+
+            // Charging Speed Categories based on RAW incoming power:
+            // <5W = Slow, 5W to <10W = Normal, 10W to <=20W = Fast, >20W = Ultra Fast
+            val speedCategory = if (isCharging == true && rawPowerWatts != null) {
                 when {
-                    powerWatts > 20f -> CanonicalChargingSpeed.ULTRA_FAST
-                    powerWatts >= 10f -> CanonicalChargingSpeed.FAST
-                    powerWatts >= 5f -> CanonicalChargingSpeed.NORMAL
+                    rawPowerWatts > 20.0f -> CanonicalChargingSpeed.ULTRA_FAST
+                    rawPowerWatts >= 10.0f -> CanonicalChargingSpeed.FAST
+                    rawPowerWatts >= 5.0f -> CanonicalChargingSpeed.NORMAL
                     else -> CanonicalChargingSpeed.SLOW
                 }
-            } else if (isCharging == false) {
-                CanonicalChargingSpeed.UNAVAILABLE
             } else {
                 CanonicalChargingSpeed.UNAVAILABLE
             }
 
-            // Charger presence and actual charging are separate transitions.
+            // Announcement Speed Categories based on NET effective power:
+            val effectiveNetPower = netPowerWatts ?: 0f
+            val announcementCategory = if (isCharging == true && netPowerWatts != null) {
+                when {
+                    effectiveNetPower > 20.0f -> CanonicalChargingSpeed.ULTRA_FAST
+                    effectiveNetPower >= 10.0f -> CanonicalChargingSpeed.FAST
+                    effectiveNetPower >= 5.0f -> CanonicalChargingSpeed.NORMAL
+                    else -> CanonicalChargingSpeed.SLOW
+                }
+            } else {
+                CanonicalChargingSpeed.UNAVAILABLE
+            }
+
+            // Session Timestamp tracking
             if (isConnected != null && isConnected != lastConnectedState) {
-                if (isConnected) chargerConnectedAt = now else chargerDisconnectedAt = now
+                if (isConnected) {
+                    chargerConnectedAt = now
+                    chargerDisconnectedAt = null
+                } else {
+                    chargerDisconnectedAt = now
+                    chargerConnectedAt = null
+                    chargingStartedAt = null
+                    chargingStoppedAt = null
+                }
             }
             if (isCharging != null && isCharging != lastChargingState) {
                 if (isCharging) {
                     chargingStartedAt = now
+                    chargingStoppedAt = null
+                    dischargingStartedAt = null
                 } else {
                     chargingStoppedAt = now
+                    chargingStartedAt = null
+                    dischargingStartedAt = now
                 }
             }
 
             val isDischarging = status == BatteryManager.BATTERY_STATUS_DISCHARGING
             val wasDischarging = lastDischargingStatus
-            if (isDischarging && !wasDischarging) dischargingStartedAt = now
+            if (isDischarging && !wasDischarging) {
+                dischargingStartedAt = now
+            }
             lastDischargingStatus = isDischarging
+
+            // Live ETA calculation based on observed progression over time
+            if (validatedLevel != null) {
+                levelSamples.add(LevelSample(validatedLevel, now))
+                if (levelSamples.size > 20) {
+                    levelSamples.removeAt(0)
+                }
+            }
+
+            var chargingEta: Int? = null
+            var dischargingEta: Int? = null
+
+            if (levelSamples.size >= 2) {
+                val oldest = levelSamples.first()
+                val newest = levelSamples.last()
+                val timeDiffMinutes = (newest.timestamp - oldest.timestamp) / 60_000f
+                val levelDiff = newest.level - oldest.level
+
+                if (timeDiffMinutes >= 2.0f && abs(levelDiff) >= 1) {
+                    val ratePerMinute = levelDiff / timeDiffMinutes
+                    if (isCharging == true && ratePerMinute > 0.01f && validatedLevel != null && validatedLevel < 100) {
+                        val remainingPct = 100 - validatedLevel
+                        chargingEta = (remainingPct / ratePerMinute).toInt().coerceIn(1, 720)
+                    } else if (isCharging == false && ratePerMinute < -0.005f && validatedLevel != null && validatedLevel > 0) {
+                        dischargingEta = (abs(validatedLevel / ratePerMinute)).toInt().coerceIn(1, 1440)
+                    }
+                }
+            }
 
             val newState = NetraCentralState(
                 batteryLevel = validatedLevel,
@@ -135,12 +219,17 @@ class NetraCentralDataCenter {
                 temperatureCelsius = tempCelsius,
                 voltageMv = voltageMv,
                 currentMa = currentMa,
-                powerWatts = powerWatts,
+                powerWatts = rawPowerWatts,
+                netPowerWatts = netPowerWatts,
+                consumptionPowerWatts = consumptionWatts,
                 chargingSpeed = speedCategory,
+                announcementSpeed = announcementCategory,
                 bluetoothConnected = bluetoothConnected,
                 bluetoothBatteryPercent = bluetoothBattery,
                 lastUpdateTimestamp = now,
-                isDataFresh = true
+                isDataFresh = true,
+                chargingEtaMinutes = chargingEta,
+                dischargingEtaMinutes = dischargingEta
             )
 
             _centralState.value = newState

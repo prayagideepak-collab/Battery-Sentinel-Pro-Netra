@@ -266,11 +266,8 @@ class BatteryMonitorService : Service() {
         } else null
 
         // Time to Full / Remaining discharge estimate
-        // A current sample without measured capacity and charge taper cannot yield ETA.
-        val timeToFullMinutes: Int? = null
-
-        // Capacity in mAh is not known here, so current alone cannot yield hours left.
-        val estimatedDischargeHours: Float? = null
+        val timeToFullMinutes: Int? = canonical.chargingEtaMinutes
+        val estimatedDischargeHours: Float? = canonical.dischargingEtaMinutes?.let { it / 60.0f }
 
         val isOverheat = tempCelsius >= 40.0f
         val isCritical = tempCelsius >= 45.0f
