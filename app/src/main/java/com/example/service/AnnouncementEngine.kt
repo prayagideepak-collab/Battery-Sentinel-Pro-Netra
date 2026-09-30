@@ -211,6 +211,7 @@ class AnnouncementEngine(private val context: Context) : TextToSpeech.OnInitList
                         CanonicalChargingSpeed.SLOW -> "Slow charging."
                         CanonicalChargingSpeed.NORMAL -> "Normal charging."
                         CanonicalChargingSpeed.FAST -> "Fast charging."
+                        CanonicalChargingSpeed.SUPER_FAST -> "Super fast charging."
                         CanonicalChargingSpeed.ULTRA_FAST -> "Ultra fast charging."
                         else -> "Normal charging."
                     }
