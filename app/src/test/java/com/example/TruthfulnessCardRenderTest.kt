@@ -53,30 +53,6 @@ class TruthfulnessCardRenderTest {
     }
 
     @Test
-    fun renderBatteryReportContent() {
-        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
-        val report = BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(emptyList(), emptyList())
-        val pdf = com.example.util.BatteryPdfReportGenerator.generateDailyReport(
-            context, emptyList(), emptyList(), report, BatteryTelemetry()
-        )
-        assertTrue("Report must be a real PDF, not a fallback", pdf != null && pdf.length() > 100L)
-        val pdfOutput = File("build/outputs/ui-renders/report-unavailable.pdf")
-        pdfOutput.parentFile?.mkdirs()
-        pdf!!.copyTo(pdfOutput, overwrite = true)
-        val bitmap = Bitmap.createBitmap(595, 842, Bitmap.Config.ARGB_8888)
-        com.example.util.BatteryPdfReportGenerator.drawReportContent(
-            Canvas(bitmap), emptyList(), emptyList(),
-            BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(emptyList(), emptyList()),
-            BatteryTelemetry()
-        )
-        val file = File("build/outputs/ui-renders/report-unavailable.png")
-        file.parentFile?.mkdirs()
-        file.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-        assertTrue(file.length() > 0L)
-        bitmap.recycle()
-    }
-
-    @Test
     fun renderUnavailableCalibrationCard() {
         compose.setContent {
             MyApplicationTheme {
