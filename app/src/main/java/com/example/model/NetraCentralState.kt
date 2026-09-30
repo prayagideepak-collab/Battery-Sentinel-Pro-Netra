@@ -11,8 +11,9 @@ enum class CanonicalChargerState {
 enum class CanonicalChargingSpeed {
     SLOW,       // < 5W
     NORMAL,     // 5W to < 10W
-    FAST,       // 10W to 20W
-    ULTRA_FAST, // > 20W
+    FAST,       // 10W to < 20W
+    SUPER_FAST, // 20W to < 40W
+    ULTRA_FAST, // >= 40W
     UNAVAILABLE;
 
     val displayLabel: String
@@ -20,6 +21,7 @@ enum class CanonicalChargingSpeed {
             SLOW -> "Slow Charging"
             NORMAL -> "Normal Charging"
             FAST -> "Fast Charging"
+            SUPER_FAST -> "Super Fast Charging"
             ULTRA_FAST -> "Ultra Fast Charging"
             UNAVAILABLE -> "Unavailable"
         }
@@ -28,8 +30,9 @@ enum class CanonicalChargingSpeed {
         get() = when (this) {
             SLOW -> "< 5W"
             NORMAL -> "5W–10W"
-            FAST -> "10W–20W"
-            ULTRA_FAST -> "> 20W"
+            FAST -> "10W–<20W"
+            SUPER_FAST -> "20W–<40W"
+            ULTRA_FAST -> "≥ 40W"
             UNAVAILABLE -> "N/A"
         }
 
@@ -37,8 +40,9 @@ enum class CanonicalChargingSpeed {
         get() = when (this) {
             SLOW -> "Slow (<5W)"
             NORMAL -> "Normal (5W–10W)"
-            FAST -> "Fast (10W–20W)"
-            ULTRA_FAST -> "Ultra Fast (>20W)"
+            FAST -> "Fast (10W–<20W)"
+            SUPER_FAST -> "Super Fast (20W–<40W)"
+            ULTRA_FAST -> "Ultra Fast (≥40W)"
             UNAVAILABLE -> "Unavailable"
         }
 }
