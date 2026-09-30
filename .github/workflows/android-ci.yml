@@ -45,6 +45,5 @@ jobs:
           name: compose-ui-renders
           path: |
             app/build/outputs/ui-renders/*.png
-            app/build/outputs/ui-renders/*.pdf
             app/build/test-results/testDebugUnitTest/*.xml
           if-no-files-found: warn
