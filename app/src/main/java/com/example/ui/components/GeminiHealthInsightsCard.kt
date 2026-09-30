@@ -311,7 +311,7 @@ fun GeminiHealthInsightsContent(
                 Icon(imageVector = Icons.Default.Chat, contentDescription = null, tint = NetraCyan, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = if (isChatExpanded) "Hide Longevity Q&A Assistant" else "Ask Gemini About Your Battery Habits",
+                    text = if (isChatExpanded) "Hide Longevity Q&A Assistant" else "Ask About Your Battery Records",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = NetraCyan
