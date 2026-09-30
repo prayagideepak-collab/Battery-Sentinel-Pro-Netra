@@ -150,9 +150,9 @@ fun BatteryScreen(
                         val rawPowerStr = canonical.powerWatts?.let { "${String.format(Locale.US, "%.2f", it)} W" } ?: "Unavailable"
                         val speedCategoryStr = when (canonical.chargingSpeed) {
                             CanonicalChargingSpeed.SLOW -> "Slow (<5W)"
-                            CanonicalChargingSpeed.NORMAL -> "Normal (5W–10W)"
-                            CanonicalChargingSpeed.FAST -> "Fast (10W–20W)"
-                            CanonicalChargingSpeed.ULTRA_FAST -> "Ultra Fast (>20W)"
+                            CanonicalChargingSpeed.NORMAL -> "Normal (5W–<10W)"
+                            CanonicalChargingSpeed.FAST -> "Fast (10W–<20W)"\n                            CanonicalChargingSpeed.SUPER_FAST -> "Super Fast (20W–<40W)"
+                            CanonicalChargingSpeed.ULTRA_FAST -> "Ultra Fast (≥40W)"
                             CanonicalChargingSpeed.UNAVAILABLE -> "Unavailable"
                         }
 
