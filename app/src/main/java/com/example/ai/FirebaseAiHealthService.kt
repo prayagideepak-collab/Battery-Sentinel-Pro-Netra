@@ -21,7 +21,7 @@ data class ConversationalLongevityInsight(
     val title: String,
     val summary: String,
     val detailedAdvice: String,
-    val habitScore: Int, // 0 - 100
+    val habitScore: Int?, // No validated habit score is available
     val personalizedActionPlan: List<String>,
     val electrochemicalExplanation: String,
     val aiModelUsed: String = "Firebase AI (Gemini Flash)"
@@ -46,6 +46,9 @@ object FirebaseAiHealthService {
         sessions: List<ChargingSession>,
         degradationReport: DegradationReport
     ): ConversationalLongevityInsight = withContext(Dispatchers.IO) {
+        if (degradationReport.estimatedCapacityHealthPercent == null) {
+            return@withContext generateLocalLongevityFallback(degradationReport)
+        }
         val prompt = buildLongevityPrompt(records, sessions, degradationReport)
 
         // Try Firebase AI SDK first
@@ -128,17 +131,20 @@ object FirebaseAiHealthService {
         sessions: List<ChargingSession>,
         report: DegradationReport
     ): String = withContext(Dispatchers.IO) {
+        if (report.estimatedCapacityHealthPercent == null) {
+            return@withContext generateConversationalFallbackAnswer(query, report)
+        }
         val prompt = """
             User Question: "$query"
 
             Device Real Battery Telemetry Context:
-            - Health Failure Risk: ${report.riskPercent}% (${report.riskLevel})
+            - Health Failure Risk: ${report.riskPercent?.let { "$it%" } ?: "Unavailable"} (${report.riskLevel ?: "Unavailable"})
             - Primary Risk Factor: ${report.primaryRiskFactor}
-            - Estimated Remaining Capacity: ${report.estimatedCapacityHealthPercent}%
-            - High Voltage (>80%) Dwell Time: ${report.highVoltageDwellMinutes} minutes
-            - Thermal Stress Hours (>38°C): ${String.format("%.1f", report.thermalStressHours)}h
-            - Deep Discharges: ${report.deepDischargeCount}
-            - Total Equivalent Full Cycles: ${report.totalEquivalentCycles}
+            - Estimated Remaining Capacity: ${report.estimatedCapacityHealthPercent?.let { "$it%" } ?: "Unavailable"}
+            - High Voltage (>80%) Dwell Time: Unavailable (sample intervals not enough)
+            - Thermal Stress Hours (>38°C): Unavailable (sample intervals not enough)
+            - Deep Discharges: ${report.deepDischargeCount?.toString() ?: "Unavailable"}
+            - Observed charge throughput (partial history): ${report.totalEquivalentCycles} full-charge equivalents
             - Recent Charging Sessions: ${sessions.take(3).joinToString { "${it.startLevel}%->${it.endLevel}% (${it.durationMinutes}m, Peak: ${it.peakTemperature}°C)" }}
 
             Provide a concise, friendly, conversational and scientifically accurate answer tailored to the user's real hardware telemetry. Keep under 4-5 sentences.
@@ -195,12 +201,12 @@ object FirebaseAiHealthService {
     ): String {
         return """
             Analyze these real Room SQLite database telemetry trends for an Android device:
-            - Failure Risk Index: ${report.riskPercent}% (Level: ${report.riskLevel})
+            - Failure Risk Index: ${report.riskPercent?.let { "$it%" } ?: "Unavailable"} (Level: ${report.riskLevel ?: "Unavailable"})
             - Primary Degradation Driver: ${report.primaryRiskFactor}
-            - Estimated Cell Capacity Retention: ${report.estimatedCapacityHealthPercent}%
-            - High Voltage (>80% SoC) Dwell Time: ${report.highVoltageDwellMinutes} mins
-            - Thermal Stress Time (>38°C): ${String.format("%.1f", report.thermalStressHours)} hours
-            - Deep Discharges (<15% SoC): ${report.deepDischargeCount}
+            - Estimated Cell Capacity Retention: ${report.estimatedCapacityHealthPercent?.let { "$it%" } ?: "Unavailable"}
+            - High Voltage (>80% SoC) Dwell Time: Unavailable (sample intervals not enough)
+            - Thermal Stress Time (>38°C): Unavailable (sample intervals not enough)
+            - Deep Discharges (<15% SoC): ${report.deepDischargeCount?.toString() ?: "Unavailable"}
             - Total Recorded Historical Samples: ${records.size}
             - Recent Completed Sessions: ${sessions.take(5).joinToString { "${it.startLevel}%->${it.endLevel}% (${it.chargerType}, Peak ${it.peakTemperature}°C)" }}
 
@@ -228,9 +234,9 @@ object FirebaseAiHealthService {
 
             ConversationalLongevityInsight(
                 title = obj.optString("title", "Personalized Battery Longevity Blueprint"),
-                summary = obj.optString("summary", "Your charging telemetry shows healthy cycling with minor high-voltage dwell."),
-                detailedAdvice = obj.optString("detailedAdvice", "Unplugging near 80% and avoiding high-heat fast charging will prolong your phone's battery lifespan by up to 2.5 years."),
-                habitScore = obj.optInt("habitScore", 88),
+                summary = obj.optString("summary", "Capacity health and failure risk are unavailable."),
+                detailedAdvice = obj.optString("detailedAdvice", "Use device-supported charging controls and avoid excessive heat."),
+                habitScore = null,
                 personalizedActionPlan = actionPlan.ifEmpty { listOf("Unplug when reaching 80%", "Avoid charging under direct sunlight", "Recharge before dropping below 15%") },
                 electrochemicalExplanation = obj.optString("electrochemicalExplanation", "Lithium-ion cells experience mechanical strain during phase transition at 4.3V+. Limiting peak state-of-charge preserves cathode lattice stability."),
                 aiModelUsed = source
@@ -238,48 +244,18 @@ object FirebaseAiHealthService {
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing JSON", e)
             generateLocalLongevityFallback(
-                DegradationReport(
-                    riskPercent = 15,
-                    riskLevel = FailureRiskLevel.LOW,
-                    estimatedCapacityHealthPercent = 95,
-                    totalEquivalentCycles = 20f,
-                    highVoltageDwellMinutes = 30,
-                    thermalStressHours = 0.5f,
-                    deepDischargeCount = 1,
-                    primaryRiskFactor = "Minimal Wear",
-                    keyMitigation = "Keep 80% cutoff active",
-                    detailedInsights = emptyList(),
-                    requiresAlert = false
-                )
+                BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(emptyList(), emptyList())
             )
         }
     }
 
     private fun generateLocalLongevityFallback(report: DegradationReport): ConversationalLongevityInsight {
-        val habitScore = (100 - report.riskPercent).coerceIn(45, 98)
-        val title = when (report.riskLevel) {
-            FailureRiskLevel.CRITICAL -> "🚨 Urgent Battery Preservation Protocol"
-            FailureRiskLevel.ELEVATED -> "⚠️ Actionable Longevity Tune-Up"
-            FailureRiskLevel.MODERATE -> "📈 Healthy Battery Longevity Plan"
-            FailureRiskLevel.LOW -> "🌟 Pristine Battery Health Blueprint"
-        }
-
-        val summary = "Netra telemetry reveals a habit score of $habitScore/100. Primary stress driver: ${report.primaryRiskFactor}."
-        val advice = if (report.highVoltageDwellMinutes > 45) {
-            "You frequently leave your device plugged in past 80%. High voltage dwell (above 4.25V) is the single largest contributor to lithium cobalt oxide dissolution."
-        } else if (report.thermalStressHours > 1.0f) {
-            "Your phone logged ${String.format("%.1f", report.thermalStressHours)} hours above 38°C. Heat accelerates electrolyte oxidation and anode SEI growth."
-        } else {
-            "Your charging cycles are well balanced. Maintain the 20% to 80% sweet spot to maximize capacity retention over years of use."
-        }
-
-        val actions = listOf(
-            "Enable Netra 80% Target Unplug Alarm to prevent high-voltage dwell.",
-            if (report.thermalStressHours > 0.5f) "Avoid wireless or high-wattage fast charging while playing intensive games." else "Use standard 10W-15W charging overnight instead of ultra-fast chargers.",
-            "Recharge promptly when dropping below 20% to prevent copper dissolution."
-        )
-
-        val explanation = "Lithium-ion batteries age via solid-electrolyte interphase (SEI) layer growth and cathode micro-cracking. Keeping the cell between 20%-80% reduces mechanical volume expansion by over 60%."
+        val habitScore: Int? = null
+        val title = "Battery history insight unavailable"
+        val summary = "Battery capacity and failure risk cannot be determined from the available data."
+        val advice = "Collect battery records over time. Android charge readings alone do not measure remaining cell capacity."
+        val actions = listOf("Watch for excessive heat during charging.")
+        val explanation = "No calibrated battery capacity or validated failure-risk estimate is available."
 
         return ConversationalLongevityInsight(
             title = title,
@@ -288,28 +264,10 @@ object FirebaseAiHealthService {
             habitScore = habitScore,
             personalizedActionPlan = actions,
             electrochemicalExplanation = explanation,
-            aiModelUsed = "Firebase AI & Heuristic Intelligence"
+            aiModelUsed = "Local observation summary (no AI diagnosis)"
         )
     }
 
-    private fun generateConversationalFallbackAnswer(query: String, report: DegradationReport): String {
-        val q = query.lowercase()
-        return when {
-            q.contains("overnight") || q.contains("night") -> {
-                "Overnight charging keeps your battery at 100% (high voltage dwell) for several hours. To preserve health, enable Netra's 80% target alarm or use a smart plug/scheduled charger."
-            }
-            q.contains("heat") || q.contains("hot") || q.contains("temperature") -> {
-                "Cell temperatures above 40°C cause the electrolyte to break down 3x faster. If your phone gets warm while fast charging, remove the case and keep it in a cool spot."
-            }
-            q.contains("80") || q.contains("target") -> {
-                "Charging to 80% instead of 100% cuts electrochemical stress by half and can double the total number of usable recharge cycles from 500 to over 1,200."
-            }
-            q.contains("fast") || q.contains("watt") -> {
-                "Fast charging generates more heat. It's great when you're in a hurry, but standard 10-15W charging is gentler on your battery chemistry for daily use."
-            }
-            else -> {
-                "Based on your Room database records, your battery is at ${report.estimatedCapacityHealthPercent}% estimated health with a ${report.riskLevel} failure risk. Follow the 20%-80% rule to maximize longevity!"
-            }
-        }
-    }
+    private fun generateConversationalFallbackAnswer(query: String, report: DegradationReport): String =
+        "Capacity health and failure risk are unavailable. The available battery records cannot establish either measure."
 }
