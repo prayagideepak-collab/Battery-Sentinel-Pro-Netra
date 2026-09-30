@@ -500,7 +500,7 @@ class NetraCentralDataCenter {
                             source = source
                         )
                     )
-                } else if ((mergedLevel >= 35 || mergedIsCharging == true) && isLowBatteryControlActiveState) {
+                } else if (mergedLevel >= 35 && isLowBatteryControlActiveState) {
                     isLowBatteryControlActiveState = false
                     if (!isCriticalThermalActiveState) {
                         targetBrightnessPercentState = null
