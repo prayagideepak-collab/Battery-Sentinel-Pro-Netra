@@ -79,7 +79,10 @@ class ExampleRobolectricTest {
         val suggestion = OptimalChargingWindowAdvisor.analyzeChargingHabitsAndSuggestWindows(records, sessions)
         assertNotNull(suggestion.primaryOptimalWindow)
         assertNotNull(suggestion.discouragedWindow)
-        assertEquals(24, suggestion.hourlyScores.size)
+        assertEquals("Unavailable", suggestion.primaryOptimalWindow)
+        assertEquals("Unavailable", suggestion.discouragedWindow)
+        assertEquals("Unavailable", suggestion.predictedLifespanExtension)
+        assertTrue(suggestion.hourlyScores.isEmpty())
     }
 
     @Test
