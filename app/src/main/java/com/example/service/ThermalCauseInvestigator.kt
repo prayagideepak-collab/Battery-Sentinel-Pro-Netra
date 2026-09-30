@@ -58,7 +58,7 @@ class ThermalCauseInvestigator(private val context: Context) : SensorEventListen
                 "Internal Component Heat: Ambient is normal (${String.format(Locale.US, "%.1f", ambient)}°C). Thermal stress caused by active processor or charging workload."
             }
             ambientTempSensor == null -> {
-                "Internal Component Heat (Hardware ambient sensor unavailable on this device)."
+                "Thermal cause cannot be determined reliably because an ambient-temperature sensor is unavailable on this device."
             }
             else -> {
                 "Evaluating thermal dissipation conditions..."
