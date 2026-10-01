@@ -43,5 +43,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: compose-ui-renders
-          path: app/build/outputs/ui-renders/*.png
+          path: |
+            app/build/outputs/ui-renders/*.png
+            app/build/test-results/testDebugUnitTest/*.xml
           if-no-files-found: warn

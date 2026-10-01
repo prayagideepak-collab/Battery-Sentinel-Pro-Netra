@@ -11,6 +11,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
+import com.example.ai.BatteryDegradationPredictor
+import com.example.ui.components.GeminiHealthInsightsContent
 import com.example.model.CalibrationSessionState
 import com.example.model.BatteryTelemetry
 import com.example.ui.components.BatteryCalibrationWizardCard
@@ -34,6 +36,21 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TruthfulnessCardRenderTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test
+    fun renderUnavailableDegradationCard() {
+        compose.setContent {
+            MyApplicationTheme {
+                Column(Modifier.width(380.dp).background(MaterialTheme.colorScheme.background).padding(16.dp)) {
+                    GeminiHealthInsightsContent(
+                        BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(emptyList(), emptyList()),
+                        null, false, emptyList(), false, {}, {}
+                    )
+                }
+            }
+        }
+        captureCard("degradation-unavailable.png")
+    }
 
     @Test
     fun renderUnavailableCalibrationCard() {

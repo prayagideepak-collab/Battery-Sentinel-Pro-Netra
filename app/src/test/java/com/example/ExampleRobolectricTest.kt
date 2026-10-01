@@ -12,6 +12,7 @@ import com.example.model.DotState
 import com.example.util.BatteryPdfReportGenerator
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -63,9 +64,25 @@ class ExampleRobolectricTest {
 
         val report = BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(records, sessions)
         assertNotNull(report)
-        assertTrue(report.riskPercent > 0)
-        assertTrue(report.estimatedCapacityHealthPercent in 50..100)
+        assertNull(report.riskPercent)
+        assertNull(report.riskLevel)
+        assertNull(report.estimatedCapacityHealthPercent)
+        assertNull(report.highVoltageDwellMinutes)
+        assertNull(report.thermalStressHours)
+        assertNull(report.deepDischargeCount)
+        assertEquals(0.8f, report.totalEquivalentCycles, 0.001f)
+        assertFalse(report.requiresAlert)
         assertNotNull(report.primaryRiskFactor)
+    }
+
+    @Test
+    fun `empty battery history has no invented capacity cycles or risk`() {
+        val report = BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(emptyList(), emptyList())
+        assertNull(report.riskPercent)
+        assertNull(report.riskLevel)
+        assertNull(report.estimatedCapacityHealthPercent)
+        assertEquals(0f, report.totalEquivalentCycles, 0.001f)
+        assertFalse(report.requiresAlert)
     }
 
     @Test
@@ -87,7 +104,7 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `test daily PDF report generator creation`() {
+    fun `unverified PDF export produces no fake file`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val records = listOf(
             BatteryRecord(level = 80, temperature = 28.0f, voltageMv = 4100, currentMa = 1500, powerWatts = 6.0f, isCharging = true, pluggedType = "AC", healthStatus = "GOOD")
@@ -98,10 +115,11 @@ class ExampleRobolectricTest {
         val report = BatteryDegradationPredictor.analyzeDegradationAndFailureRisk(records, sessions)
         val telemetry = BatteryTelemetry(level = 80, isCharging = true)
 
+        val reportDir = java.io.File(context.filesDir, "reports")
+        val before = reportDir.listFiles()?.map { it.name }?.toSet() ?: emptySet()
         val pdfFile = BatteryPdfReportGenerator.generateDailyReport(context, records, sessions, report, telemetry)
-        assertNotNull(pdfFile)
-        assertTrue(pdfFile!!.exists())
-        assertTrue(pdfFile.length() > 0)
+        assertNull(pdfFile)
+        assertEquals(before, reportDir.listFiles()?.map { it.name }?.toSet() ?: emptySet())
     }
 
     @Test
