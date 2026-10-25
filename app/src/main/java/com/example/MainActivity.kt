@@ -73,7 +73,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // BatteryMonitorService is started once by NetraApplication; do not start it again here.
+        // BatteryMonitorService is started once by NetraApplication.
+
         setContent {
             MyApplicationTheme {
                 MainAppContent(viewModel = viewModel)
@@ -210,3 +211,93 @@ fun MainAppContent(viewModel: NetraViewModel) {
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            StatusDot(state = telemetry.serviceDotState, size = 6.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = canonical.batteryLevel?.let { "$it%" } ?: "Unavailable",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (canonical.isCharging == true) NetraCyan else NetraEmerald
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = canonical.temperatureCelsius?.let { "• ${String.format("%.1f", it)}°C" } ?: "• Temp unavailable",
+                                fontSize = 11.sp,
+                                color = if ((canonical.temperatureCelsius ?: 0f) >= 40f) StatusRed else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = { viewModel.toggleUltraBatterySaver() },
+                        modifier = Modifier.testTag("top_bar_ultra_saver_button")
+                    ) {
+                        val isUltraActive = settings.ultraBatterySaverActive
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = "Toggle Ultra Battery Saver",
+                            tint = if (isUltraActive) StatusRed else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { viewModel.refreshHardwareState() },
+                        modifier = Modifier.testTag("top_bar_refresh_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh Telemetry",
+                            tint = NetraCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                modifier = Modifier.statusBarsPadding()
+            )
+        },
+        bottomBar = {
+            NetraBottomNav(
+                currentTab = currentTab,
+                onTabSelected = { tab ->
+                    currentTab = tab
+                }
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            val settings by viewModel.settings.collectAsStateWithLifecycle()
+            com.example.ui.components.UltraBatterySaverBanner(
+                isActive = settings.ultraBatterySaverActive,
+                onToggle = { viewModel.toggleUltraBatterySaver() },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+            )
+
+            Crossfade(
+                targetState = currentTab,
+                label = "tab_transition",
+                modifier = Modifier.weight(1f)
+            ) { tab ->
+                when (tab) {
+                    NetraTab.HOME -> StatusScreen(
+                        viewModel = viewModel,
+                        onOpenGraph = { currentTab = NetraTab.BATTERY },
+                        onNavigateTab = { target ->
+                            currentTab = target
+                        }
+                    )
+                    NetraTab.BATTERY -> BatteryScreen(viewModel = viewModel)
+                    NetraTab.MONITORING -> MonitoringScreen(viewModel = viewModel)
+                    NetraTab.DEVICES -> DevicesScreen(viewModel = viewModel)
+                    NetraTab.SETTINGS -> SettingsScreen(viewModel = viewModel)
+                }
+            }
+        }
+    }
+}
