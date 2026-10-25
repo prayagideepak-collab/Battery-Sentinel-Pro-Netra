@@ -21,6 +21,7 @@ class PowerProfileManager(context: Context) {
 
     private var thermalOverrideActive = false
     private var lastEffectiveMode: PowerProfileMode? = null
+    private var latestTelemetry: BatteryTelemetry? = null
 
     private val _profileState = MutableStateFlow(loadProfileState())
     val profileState: StateFlow<PowerProfileState> = _profileState.asStateFlow()
@@ -45,11 +46,12 @@ class PowerProfileManager(context: Context) {
 
     fun setPowerProfile(mode: PowerProfileMode, currentTelemetry: BatteryTelemetry? = null) {
         prefs.edit().putString("selected_profile", mode.name).apply()
-        evaluateProfile(mode, currentTelemetry)
+        evaluateProfile(mode, currentTelemetry ?: latestTelemetry)
     }
 
     /** Re-evaluates only from the canonical telemetry event path. */
     fun onTelemetryUpdate(telemetry: BatteryTelemetry) {
+        latestTelemetry = telemetry
         evaluateProfile(_profileState.value.selectedMode, telemetry)
     }
 
