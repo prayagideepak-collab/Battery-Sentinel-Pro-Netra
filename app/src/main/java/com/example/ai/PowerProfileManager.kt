@@ -73,7 +73,7 @@ class PowerProfileManager(context: Context) {
         // BatteryManager temperature can be unavailable (0); in that case do not infer overheating.
         if (temperature >= 40f || telemetry?.isCriticalOverheat == true) {
             thermalOverrideActive = true
-        } else if (temperature in 0f..38f && telemetry?.isCriticalOverheat != true) {
+        } else if (temperature > 0f && temperature <= 38f && telemetry?.isCriticalOverheat != true) {
             thermalOverrideActive = false
         }
 
