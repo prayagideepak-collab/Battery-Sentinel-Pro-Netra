@@ -2,13 +2,17 @@ name: Android CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "audit/**", "fix/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   debug-build-and-test:
@@ -23,27 +27,26 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - name: Set up Gradle 9.3.1
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 9.3.1
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-      - name: Generate CI-only debug signing key
-        run: >-
-          keytool -genkeypair -keystore debug.keystore -storepass android
-          -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048
-          -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
       - name: Build debug APK and run unit tests
-        run: gradle --no-daemon :app:assembleDebug :app:testDebugUnitTest
-      - name: Upload Compose renders for visual review
+        run: ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest --stacktrace
+      - name: Run Android lint
+        run: ./gradlew --no-daemon :app:lintDebug --stacktrace
+      - name: Upload debug APK and test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: compose-ui-renders
+          name: battery-sentinel-pro-netra-debug-and-test-reports
           path: |
-            app/build/outputs/ui-renders/*.png
+            app/build/outputs/apk/debug/*.apk
+            app/build/reports/lint-results-debug.html
             app/build/test-results/testDebugUnitTest/*.xml
           if-no-files-found: warn
+          retention-days: 14
