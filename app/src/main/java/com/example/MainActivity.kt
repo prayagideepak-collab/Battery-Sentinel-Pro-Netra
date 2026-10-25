@@ -73,9 +73,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        try {
-            com.example.service.BatteryMonitorService.startService(this)
-        } catch (_: Exception) {}
+        // BatteryMonitorService is started once by NetraApplication.
 
         setContent {
             MyApplicationTheme {

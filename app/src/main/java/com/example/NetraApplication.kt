@@ -21,9 +21,6 @@ class NetraApplication : Application() {
     lateinit var centralDataCenter: NetraCentralDataCenter
         private set
 
-    lateinit var capabilityRegistry: com.example.service.CentralCapabilityRegistry
-        private set
-
     lateinit var storageCacheManager: com.example.data.repository.StorageCacheManager
         private set
 
@@ -45,7 +42,7 @@ class NetraApplication : Application() {
         database = NetraDatabase.getDatabase(this)
         settingsRepository = SettingsRepository(this)
         centralDataCenter = NetraCentralDataCenter()
-        capabilityRegistry = com.example.service.CentralCapabilityRegistry(this)
+        // The Central Data Center owns and initializes the single capability registry.
         centralDataCenter.initPersistence(this)
         centralDataCenter.initCapabilityRegistry(this)
         storageCacheManager = com.example.data.repository.StorageCacheManager(this)
@@ -60,7 +57,7 @@ class NetraApplication : Application() {
             com.example.util.BluetoothHelper.initialize(this)
         } catch (_: Exception) {}
 
-        // Start 24/7 low-power service safely
+        // Start the foreground monitor once from the application lifecycle.
         try {
             BatteryMonitorService.startService(this)
         } catch (_: Exception) {}
