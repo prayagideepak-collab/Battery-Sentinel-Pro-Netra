@@ -38,6 +38,13 @@ jobs:
           -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
       - name: Build debug APK and run unit tests
         run: gradle --no-daemon :app:assembleDebug :app:testDebugUnitTest
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: battery-sentinel-pro-netra-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload Compose renders for visual review
         if: always()
         uses: actions/upload-artifact@v4
