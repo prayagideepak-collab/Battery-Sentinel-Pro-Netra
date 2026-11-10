@@ -70,7 +70,59 @@ Do not merge either PR automatically. Do not reimplement their changes without c
 | AI diagnostics | AI service/predictor modules present | Earlier preliminary observation only | Claims must be checked against real implementation |
 | Backup/restore | Manifest backup rules present | Not established | Inspect actual configuration and legacy APK |
 
-## 7. Audit rules
+## 7. Additional confirmed source risks on inspected main
+
+These are source-level findings from the inspected files. They have not yet been reproduced on a physical device.
+
+### F-02 / HIGH — destructive Room migration fallback
+
+File: `app/src/main/java/com/example/data/local/NetraDatabase.kt`
+
+The database is version 1 and uses `.fallbackToDestructiveMigration()`. When a future schema version changes without a matching migration, Room may drop and recreate the database, deleting battery history, charging sessions, and activity logs. This is a direct data-preservation risk.
+
+Required correction: implement explicit versioned migrations, enable schema export, add migration tests, and remove destructive fallback for user history. Do not change schema until migration coverage is ready.
+
+### F-03 / MEDIUM — duplicate capability-registry instances
+
+Files:
+- `app/src/main/java/com/example/NetraApplication.kt`
+- `app/src/main/java/com/example/service/NetraCentralDataCenter.kt`
+
+`NetraApplication.onCreate()` constructs `capabilityRegistry`, then `centralDataCenter.initCapabilityRegistry(this)` constructs another registry internally. This creates two registry instances and can lead to divergent caches/ownership. PR #22 claims this duplication is addressed on its branch; compare its diff and tests before making a separate fix.
+
+### F-04 / MEDIUM — capability detection can overstate availability
+
+File: `app/src/main/java/com/example/service/CentralCapabilityRegistry.kt`
+
+The static registry marks background monitoring and battery-health status AVAILABLE based on broad assumptions. The dynamic registry marks battery telemetry and charging state AVAILABLE unconditionally; when battery temperature is missing, the presence of a BatteryManager is treated as sufficient to mark temperature AVAILABLE. A system service existing does not prove that a particular property is exposed or returning valid data.
+
+Required correction: distinguish SUPPORTED, AVAILABLE_NOW, PERMISSION_REQUIRED, UNAVAILABLE, and LAST_KNOWN based on actual property reads and permission state. Add tests for missing/zero/sentinel OEM readings.
+
+### F-05 / MEDIUM — thermal cause wording exceeds evidence
+
+File: `app/src/main/java/com/example/service/ThermalCauseInvestigator.kt`
+
+When ambient temperature is below 30°C and battery temperature is at least 40°C, the code labels the cause as internal component heat caused by processor or charging workload. Those two readings do not establish the actual heat source. An ambient sensor may also be absent or stale.
+
+Required correction: use wording such as "possible internal heat contribution; cause not confirmed", include sample timestamps/freshness, and never infer CPU/GPU temperature from battery temperature.
+
+### F-06 / MEDIUM — telemetry sentinel starts with optimistic health flags
+
+File: `app/src/main/java/com/example/service/TelemetrySentinel.kt`
+
+The initial health report sets battery, thermal, and Bluetooth monitoring flags to true before the first successful telemetry sample or collector-health proof. This can briefly report a healthy system before it has been verified.
+
+Required correction: start in UNKNOWN/STARTING or UNVERIFIED state; mark each subsystem active only after its own successful sample/collector confirmation. Track per-subsystem freshness rather than inferring all three from one battery sample.
+
+### F-07 / MEDIUM — charging session start is held in memory
+
+File: `app/src/main/java/com/example/data/repository/BatteryRepository.kt`
+
+`currentChargingSessionStart` and peak temperature are in-memory fields. A process death during a charging session can lose the in-progress session anchor and peak-temperature context. Completed sessions are persisted, but restoration of an active session is not shown in this repository implementation.
+
+Required correction: persist session-open/session-close transitions or reconstruct a safe session anchor from the last persisted record on startup. Add process-restart and interrupted-session tests. Do not invent missing interval data.
+
+## 8. Audit rules
 
 1. Keep the current central data center as the intended single source of truth unless evidence proves the design must change.
 2. Identify duplicate collectors, foreground services, loops, observers, and state ownership before adding anything.
