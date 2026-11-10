@@ -31,7 +31,8 @@ abstract class NetraDatabase : RoomDatabase() {
                     NetraDatabase::class.java,
                     "netra_battery_sentinel.db"
                 )
-                .fallbackToDestructiveMigration()
+                // Never use destructive fallback for user battery history.
+                // Schema changes must ship with explicit, tested Room migrations.
                 .build()
                 INSTANCE = instance
                 instance
