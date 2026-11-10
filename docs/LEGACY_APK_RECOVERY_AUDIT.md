@@ -133,7 +133,7 @@ Required correction: persist session-open/session-close transitions or reconstru
 7. Preserve existing data and migrations. Do not delete user history.
 8. No change to `main`, no merge, no release, and no signing/version change without owner approval.
 
-## 8. Next required forensic steps
+## 9. Next required forensic steps
 
 - Reacquire the exact legacy APK bytes and verify SHA-256 before analysis.
 - Decode its manifest and verify package/version/SDK/permissions.
@@ -143,6 +143,6 @@ Required correction: persist session-open/session-close transitions or reconstru
 - Label every result VERIFIED, INFERRED, NOT FOUND, or UNVERIFIED.
 - Only then produce an implementation plan and separate PRs for approved, low-risk changes.
 
-## 9. Validation status
+## 10. Validation status
 
 No Android build or test was run by this documentation-only GitHub step. No APK was uploaded to this repository. No runtime claim is made. The branch is intentionally isolated from `main`.
