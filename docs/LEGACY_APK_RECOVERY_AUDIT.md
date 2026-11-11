@@ -180,3 +180,22 @@ Not confirmed yet: package ID, version name/code, min/target SDK, signer identit
 5. Build a feature-by-feature evidence matrix: VERIFIED IN BYTECODE, UI-ONLY, STUB/NO-OP, API-DEPENDENT, NETWORK-DEPENDENT, or UNVERIFIED.
 6. Select only safe, testable features for the 15 November release candidate. Full feature parity is not a credible four-day commitment.
 
+
+
+### Defined-class inventory — parser pass 2
+
+A direct DEX header/type/class-definition parser (not merely a string-pool scan) now reports:
+- 33,814 defined class entries across all 19 DEX files.
+- 3,316 defined classes in the `com.example` application namespace.
+- 35,349 unique class-like descriptors in the earlier string-pool scan (includes referenced/dependency types; not the defined-class count).
+
+Representative application class families confirmed as **defined class names** include:
+- Battery/charging: `BatteryCapacityEngine`, `BatteryPredictionEngine`, `BatteryVelocityEngine`, `ChargingClassificationEngine`, `AuthoritativeEtaResult`.
+- Thermal/power: `ThermalProtectionEngine`, `ThermalSessionState`, `AutonomousPowerPolicyEngine`, `CpuWorkBudget`, `SensorSamplingMode`.
+- AI: `NetraBatteryTwin`, `NetraPredictor`.
+- Backup/database: `GoogleDriveBackup`, `IntelligentBackupEngine`, `BatteryDatabase`, `BatteryDatabaseMigrations`.
+- Reliability: `WatchdogEngine`, `BatteryReliabilityManager`.
+- Devices/network: `BluetoothDeviceTracker`, `CanonicalDeviceRecord`, `NetworkTelemetryEngine`, `WifiDiscoveryEngine`.
+- Analytics/reports/widgets: `CPUAnalytics`, `RAMAnalytics`, `HeatAnalytics`, `MagneticSafetyReport`, `IntelligentWidgetEngine`.
+
+This establishes that the APK defines substantial code in these feature areas. It still does **not** prove that the UI exposes each feature, that the implementation is complete, that code paths are reachable, or that they work on a physical device. Generated lambda/Compose classes inflate counts; method-body and call-graph review remains necessary.
