@@ -146,3 +146,37 @@ Required correction: persist session-open/session-close transitions or reconstru
 ## 10. Validation status
 
 No Android build or test was run by this documentation-only GitHub step. No APK was uploaded to this repository. No runtime claim is made. The branch is intentionally isolated from `main`.
+
+
+## 11. APK bytes revalidated on 2026-11-11
+
+The exact uploaded APK is now mounted and was independently checked in the working session. This supersedes the earlier statement that the binary was unavailable.
+
+- File: `DOC-20260911-WA0006.apk`
+- Exact byte size: `28,163,309`
+- SHA-256: `983e9d16d56ef1fb5d2540401cd29955fe804d43d970f9a4add450e110482f05`
+- ZIP container: readable; central directory and entries enumerated successfully.
+- DEX files: 19 entries (`classes.dex` through `classes19.dex`, including multidex files).
+- Native library ABIs present: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`.
+- Embedded Android Gradle Plugin metadata: `9.1.1`.
+- The APK contains a binary `AndroidManifest.xml`, resources, and assets.
+
+### DEX inventory boundary
+
+A lightweight DEX string-pool parser read the 19 DEX files and found 329,561 string entries and 35,349 unique class-like descriptors across application and dependency namespaces. 3,320 descriptors use the `com/example/` namespace. These are **descriptor/string-pool counts, not verified defined-class counts**. A full DEX disassembler/decompiler and binary-XML decoder are not installed in this environment, so method bodies, manifest permissions, component declarations, call graphs, and actual feature execution remain unverified.
+
+### What this confirms — and does not confirm
+
+Confirmed: the supplied file is a substantial multidex Android APK with four ABI library folders and the exact hash above. It is now suitable as a fixed forensic input.
+
+Not confirmed yet: package ID, version name/code, min/target SDK, signer identity, permissions, exported components, backend/API use, database schema, or whether any discovered feature works at runtime. Do not publish these as verified until decoded from the binary manifest/resources and validated.
+
+### Immediate next actions
+
+1. Decode the binary manifest and signing certificate; record package/version/SDK/permissions/exported components.
+2. Install a DEX decompiler or use an available reproducible offline decoder; inventory defined classes and method bodies by feature family.
+3. Inspect network endpoints, embedded keys/tokens, analytics, backup destinations, and any premium/credit gates. Treat exposed credentials as compromised; do not reuse them.
+4. Compare the verified legacy implementation against the current repository and open PRs #22–25; do not duplicate pending fixes.
+5. Build a feature-by-feature evidence matrix: VERIFIED IN BYTECODE, UI-ONLY, STUB/NO-OP, API-DEPENDENT, NETWORK-DEPENDENT, or UNVERIFIED.
+6. Select only safe, testable features for the 15 November release candidate. Full feature parity is not a credible four-day commitment.
+
