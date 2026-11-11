@@ -199,3 +199,42 @@ Representative application class families confirmed as **defined class names** i
 - Analytics/reports/widgets: `CPUAnalytics`, `RAMAnalytics`, `HeatAnalytics`, `MagneticSafetyReport`, `IntelligentWidgetEngine`.
 
 This establishes that the APK defines substantial code in these feature areas. It still does **not** prove that the UI exposes each feature, that the implementation is complete, that code paths are reachable, or that they work on a physical device. Generated lambda/Compose classes inflate counts; method-body and call-graph review remains necessary.
+
+
+## 12. Binary AndroidManifest.xml decoded — 2026-11-11
+
+The uploaded APK's binary Android manifest was parsed directly from the ZIP entry. These are verified manifest values, not guesses from DEX strings:
+
+| Field | APK value |
+|---|---|
+| Package/application ID | `com.aistudio.batteryvoice.ktfpz` |
+| versionName / versionCode | `1.0` / `1` |
+| minSdk / targetSdk | 24 / 36 |
+| Application class | `com.example.BatteryApplication` |
+| `android:debuggable` | `true` |
+| `android:allowBackup` | `true` |
+| Main activity | `com.example.MainActivity` (exported) |
+| Battery service | `com.example.service.BatteryService` (not exported; special-use foreground service) |
+| Battery event receiver | `com.example.service.BatteryEventService` (exported) |
+| Boot receiver | `com.example.receiver.BootCompletedReceiver` (exported) |
+
+Declared permissions include foreground service and special-use FGS, notifications, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Bluetooth, boot completed, network/Wi-Fi state, INTERNET, MODIFY_AUDIO_SETTINGS, fine/coarse location, PACKAGE_USAGE_STATS, WRITE_SETTINGS, KILL_BACKGROUND_PROCESSES, and WAKE_LOCK.
+
+The APK also declares multiple exported widget receivers, an exported Quick Settings tile service protected by `BIND_QUICK_SETTINGS_TILE`, and an exported Device Admin receiver protected by `BIND_DEVICE_ADMIN`. The exact intent filters and receiver permission boundaries need full review before any component is copied.
+
+### Release and compatibility implications
+
+1. **This APK is not a production-release baseline as supplied:** `debuggable=true` is explicitly set. It must not be republished as a production APK without a release build and security review. The APK also has `allowBackup=true`; inspect backup rules and actual extracted data before making any data-protection claim.
+2. **Package IDs differ:** this APK declares `com.aistudio.batteryvoice.ktfpz`, while the current repository's Gradle configuration declares `com.aistudio.batterysentinel.ntra`. Android will treat them as different applications. The legacy APK cannot be installed as an in-place update of the current app, and Android will not automatically migrate its private app data to the current package. Treat it as a behavioral/feature reference, not a drop-in upgrade artifact.
+3. Current repository manifest/build configuration is materially different: current app declares `allowBackup=false`, `usesCleartextTraffic=false`, minSdk 24, targetSdk 36, and applicationId `com.aistudio.batterysentinel.ntra`. This is a configuration comparison only; it does not certify all current runtime privacy/security behavior.
+4. APK signature certificate/signer identity has **not** been verified. No claim is made that the APK was signed with the production key.
+5. Several exported components are expected Android integration points (widgets, tile, boot, device admin), but each must be checked for correct intent filters and permission protection. Exported status alone is not proof of exploitability.
+
+### Updated immediate stabilization priorities
+
+- P0 release gate: never publish the supplied debuggable APK; produce a non-debuggable, correctly signed release build from reviewed current source.
+- P1 data safety: remove destructive Room migration fallback from the current codebase and require explicit tested migrations.
+- P1 thermal correctness: do not claim a specific internal heat source from battery and ambient readings alone.
+- P1 component boundary review: compare exported components and special-use foreground service declarations against current target SDK/Play policy.
+- P1 package/data strategy: decide whether legacy data export is needed; do not promise seamless package-level migration because application IDs differ.
+
