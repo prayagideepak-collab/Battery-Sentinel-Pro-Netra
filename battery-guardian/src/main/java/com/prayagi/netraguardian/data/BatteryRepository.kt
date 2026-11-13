@@ -53,7 +53,7 @@ class BatteryRepository @Inject constructor(
             }
         }
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        context.registerReceiver(receiver, filter)?.let { receiver.onReceive(context, it) }
+            ?.let { receiver.onReceive(context, it) }
         awaitClose { runCatching { context.unregisterReceiver(receiver) } }
     }
 
