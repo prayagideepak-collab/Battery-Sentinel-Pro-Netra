@@ -95,7 +95,8 @@ private fun GuardianHome(
                     }
                     item { MetricCard("Voltage", reading?.voltageMillivolts?.let { "$it mV" } ?: "Unavailable", "Device battery telemetry") }
                     item { MetricCard("Current", reading?.currentMicroamps?.let { "%.0f mA".format(it / 1000f) } ?: "Unavailable", "BatteryManager reading; sign is device-dependent") }
-                    item { MetricCard("Net power", reading?.powerWatts?.let { "%.2f W".format(it) } ?: "Unavailable", "Voltage × current; device-reported battery-side estimate") }
+                    item { MetricCard("Net power", reading?.powerWatts?.let { "%.2f W".format(it) } ?: "Unavailable", "Voltage × current; instantaneous battery-side estimate") }
+                    item { MetricCard("Charging speed", reading?.chargingBand?.label ?: "Unavailable", "Preliminary instantaneous classification; rolling smoothing and device validation are pending.") }
                     item { MetricCard("Battery health", reading?.health ?: "Not exposed by this device", "No invented health percentage") }
                 }
                 GuardianTab.Heat -> {
