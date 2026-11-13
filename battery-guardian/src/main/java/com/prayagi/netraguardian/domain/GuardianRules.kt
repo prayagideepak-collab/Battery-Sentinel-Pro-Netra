@@ -19,10 +19,17 @@ object GuardianRules {
         return (voltageMillivolts.toDouble() * currentMicroamps.toDouble() / 1_000_000_000.0).toFloat()
     }
 
-    fun chargingBand(isCharging: Boolean, signedBatteryPowerWatts: Float?): ChargingBand {
+    fun chargingBand(
+        isCharging: Boolean,
+        signedBatteryPowerWatts: Float?,
+        chargerConnected: Boolean = false
+    ): ChargingBand {
+        val power = signedBatteryPowerWatts
+        if (chargerConnected && power != null && power < 0f) {
+            return ChargingBand.DISCHARGING_WHILE_PLUGGED
+        }
         if (!isCharging) return ChargingBand.NOT_CHARGING
-        val power = signedBatteryPowerWatts ?: return ChargingBand.UNAVAILABLE
-        if (power < 0f) return ChargingBand.DISCHARGING_WHILE_PLUGGED
+        if (power == null) return ChargingBand.UNAVAILABLE
         if (power == 0f) return ChargingBand.SLOW
         return when {
             power < 5f -> ChargingBand.SLOW
