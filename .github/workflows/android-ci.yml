@@ -23,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - name: Set up Gradle
+      - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 9.3.1
@@ -31,6 +31,11 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
+      - name: Generate CI-only debug signing key
+        run: >-
+          keytool -genkeypair -keystore debug.keystore -storepass android
+          -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048
+          -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
       - name: Verify offline-only guardian manifest and dependencies
         run: |
           if grep -R 'android.permission.INTERNET' battery-guardian/src/main/AndroidManifest.xml; then
@@ -39,8 +44,8 @@ jobs:
           if grep -Ei 'firebase|retrofit|okhttp|analytics|play-services' battery-guardian/build.gradle.kts; then
             echo "Guardian must not add network, cloud, analytics or tracking dependencies"; exit 1
           fi
-      - name: Build existing app and standalone offline guardian
-        run: gradle --no-daemon :app:assembleDebug :battery-guardian:assembleDebug :battery-guardian:testDebugUnitTest
+      - name: Build both Android apps and run Guardian unit tests
+        run: gradle --no-daemon :app:assembleDebug :app:testDebugUnitTest :battery-guardian:assembleDebug :battery-guardian:testDebugUnitTest
       - name: Upload Battery Sentinel APK
         uses: actions/upload-artifact@v4
         with:
@@ -55,3 +60,12 @@ jobs:
           path: battery-guardian/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-reports
+          path: |
+            app/build/test-results/testDebugUnitTest/*.xml
+            battery-guardian/build/test-results/testDebugUnitTest/*.xml
+          if-no-files-found: warn
