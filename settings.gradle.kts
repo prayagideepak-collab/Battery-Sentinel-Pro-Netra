@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 rootProject.name = "Battery Sentinel Pro Netra"
 
 include(":app")
+include(":battery-guardian")
