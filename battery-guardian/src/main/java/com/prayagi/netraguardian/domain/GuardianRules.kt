@@ -8,6 +8,7 @@ enum class ChargingBand(val label: String) {
     ULTRA_FAST("Ultra fast"),
     EXTREME_FAST("Extreme fast"),
     NOT_CHARGING("Not charging"),
+    DISCHARGING_WHILE_PLUGGED("Discharging despite charger connection"),
     UNAVAILABLE("Unavailable")
 }
 
@@ -21,7 +22,8 @@ object GuardianRules {
     fun chargingBand(isCharging: Boolean, signedBatteryPowerWatts: Float?): ChargingBand {
         if (!isCharging) return ChargingBand.NOT_CHARGING
         val power = signedBatteryPowerWatts ?: return ChargingBand.UNAVAILABLE
-        if (power <= 0f) return ChargingBand.SLOW
+        if (power < 0f) return ChargingBand.DISCHARGING_WHILE_PLUGGED
+        if (power == 0f) return ChargingBand.SLOW
         return when {
             power < 5f -> ChargingBand.SLOW
             power < 10f -> ChargingBand.STANDARD
