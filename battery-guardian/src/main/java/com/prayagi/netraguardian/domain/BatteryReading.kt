@@ -17,5 +17,6 @@ data class BatteryReading(
         plugged -> "Connected · not charging"
         else -> "Discharging"
     }
+    val chargingBand: ChargingBand get() = GuardianRules.chargingBand(charging, powerWatts, plugged)
     val thermalLabel: String get() = GuardianRules.thermalZone(temperatureCelsius)
 }
