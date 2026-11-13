@@ -17,14 +17,5 @@ data class BatteryReading(
         plugged -> "Connected · not charging"
         else -> "Discharging"
     }
-    val thermalLabel: String get() = when {
-        temperatureCelsius == null -> "Temperature unavailable"
-        temperatureCelsius >= 50f -> "Emergency"
-        temperatureCelsius >= 46f -> "Critical"
-        temperatureCelsius >= 43f -> "Very hot"
-        temperatureCelsius >= 40f -> "Hot"
-        temperatureCelsius >= 36f -> "Warm"
-        temperatureCelsius < 0f -> "Too cold"
-        else -> "Normal"
-    }
+    val thermalLabel: String get() = GuardianRules.thermalZone(temperatureCelsius)
 }
