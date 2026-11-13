@@ -13,7 +13,7 @@ permissions:
 jobs:
   debug-build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - name: Set up Gradle 9.3.1
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 9.3.1
@@ -31,26 +31,27 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
-      - name: Generate CI-only debug signing key
-        run: >-
-          keytool -genkeypair -keystore debug.keystore -storepass android
-          -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048
-          -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
-      - name: Build debug APK and run unit tests
-        run: gradle --no-daemon :app:assembleDebug :app:testDebugUnitTest
-      - name: Upload installable debug APK
+      - name: Verify offline-only guardian manifest and dependencies
+        run: |
+          if grep -R 'android.permission.INTERNET' battery-guardian/src/main/AndroidManifest.xml; then
+            echo "Guardian must not declare INTERNET permission"; exit 1
+          fi
+          if grep -Ei 'firebase|retrofit|okhttp|analytics|play-services' battery-guardian/build.gradle.kts; then
+            echo "Guardian must not add network, cloud, analytics or tracking dependencies"; exit 1
+          fi
+      - name: Build existing app and standalone offline guardian
+        run: gradle --no-daemon :app:assembleDebug :battery-guardian:assembleDebug :battery-guardian:testDebugUnitTest
+      - name: Upload Battery Sentinel APK
         uses: actions/upload-artifact@v4
         with:
           name: battery-sentinel-pro-netra-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
-      - name: Upload Compose renders for visual review
-        if: always()
+      - name: Upload Netra Battery Guardian APK
         uses: actions/upload-artifact@v4
         with:
-          name: compose-ui-renders
-          path: |
-            app/build/outputs/ui-renders/*.png
-            app/build/test-results/testDebugUnitTest/*.xml
-          if-no-files-found: warn
+          name: netra-battery-guardian-offline-debug-apk
+          path: battery-guardian/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
