@@ -13,7 +13,7 @@ permissions:
 jobs:
   debug-build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,21 +36,36 @@ jobs:
           keytool -genkeypair -keystore debug.keystore -storepass android
           -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048
           -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
-      - name: Build debug APK and run unit tests
-        run: gradle --no-daemon :app:assembleDebug :app:testDebugUnitTest
-      - name: Upload installable debug APK
+      - name: Verify offline-only guardian manifest and dependencies
+        run: |
+          if grep -R 'android.permission.INTERNET' battery-guardian/src/main/AndroidManifest.xml; then
+            echo "Guardian must not declare INTERNET permission"; exit 1
+          fi
+          if grep -Ei 'firebase|retrofit|okhttp|analytics|play-services' battery-guardian/build.gradle.kts; then
+            echo "Guardian must not add network, cloud, analytics or tracking dependencies"; exit 1
+          fi
+      - name: Build both Android apps and run Guardian unit tests
+        run: gradle --no-daemon :app:assembleDebug :app:testDebugUnitTest :battery-guardian:assembleDebug :battery-guardian:testDebugUnitTest
+      - name: Upload Battery Sentinel APK
         uses: actions/upload-artifact@v4
         with:
           name: battery-sentinel-pro-netra-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
-      - name: Upload Compose renders for visual review
+      - name: Upload Netra Battery Guardian APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: netra-battery-guardian-offline-debug-apk
+          path: battery-guardian/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: compose-ui-renders
+          name: android-unit-test-reports
           path: |
-            app/build/outputs/ui-renders/*.png
             app/build/test-results/testDebugUnitTest/*.xml
+            battery-guardian/build/test-results/testDebugUnitTest/*.xml
           if-no-files-found: warn
